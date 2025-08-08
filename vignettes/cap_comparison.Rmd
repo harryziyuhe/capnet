@@ -1,0 +1,135 @@
+---
+title: "Capping Variable Contributions"
+output: pdf_document
+date: "2025-06-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, includ=FALSE}
+library(glmnet)
+library(lbfgs)
+library(ParBayesianOptimization)
+source("R\\cap_optim.R")
+source("R\\tune_cap_optim.R")
+```
+
+Generate sample data for linear regression
+```{r}
+set.seed(123)
+data(QuickStartExample)
+X <- QuickStartExample$x[,1:5]
+y <- QuickStartExample$y
+y <- scale(y)
+
+shuffle <- sample(1:nrow(X))
+X <- X[shuffle,]
+y <- y[shuffle,,drop = FALSE]
+
+n <- nrow(X)
+p <- ncol(X)
+
+split <- floor(n * 0.8)
+train_X <- X[1:split,]
+train_y <- y[1:split,,drop = FALSE]
+test_X <- X[(split+1):n,]
+test_y <- y[(split+1):n,,drop = FALSE]
+mu <- 100
+L <- runif(p, 0.8, 1.2)
+```
+
+Train the best elastic net model and cap the contributions
+```{r}
+alphas <- c(0, 0.2, 0.4, 0.6, 0.8, 1)
+best_alpha <- 0
+best_lambda <- 0
+best_loss <- Inf
+
+for (alpha in alphas) {
+  enet.cv <- cv.glmnet(train_X, train_y, alpha=alpha)
+  lambda_enet <- enet.cv$lambda.min
+  enet.x <- glmnet(train_X, train_y, alpha=alpha, lambda=lambda_enet)
+  loss <- sum(predict(enet.x, train_X) - train_y) ^ 2
+  if (loss < best_loss) {
+    best_alpha <- alpha
+    best_lambda <- lambda_enet
+    best_loss <- loss
+  }
+}
+best_enet <- glmnet(train_X, train_y, alpha=best_alpha, lambda=best_lambda)
+enet_beta0 <- coef(best_enet)[1]
+enet_beta <- coef(best_enet)[-1]
+original_pred_mean <- sum(enet_beta * colMeans(train_X))
+for (i in seq_along(enet_beta)) {
+  if (abs(enet_beta[i] * max(train_X[,i])) > L[i]) {
+    enet_beta[i] <- (L[i] / max(train_X[, i])) * sign(enet_beta[i])
+  }
+}
+new_pred_mean <- sum(enet_beta * colMeans(train_X))
+enet_beta0 <- enet_beta0 + (original_pred_mean - new_pred_mean)
+```
+
+Optimize a capped model using the alpha and lambda obtained from elastic net cross-validation
+```{r}
+alpha <- best_alpha
+lambda <- best_lambda
+cap_model1 <- cap_optim(train_X, train_y, alpha, lambda, mu, L, standardize=FALSE)
+cap_model1_beta0 <- cap_model1$beta_0
+cap_model1_beta <- cap_model1$beta
+```
+
+Cross-validation and Bayesian optimization of the capped model
+```{r}
+bayes_opt <- tune_cap_optim(train_X, train_y, alpha = c(0, 1), lambda = c(0, 1), mu, L, standardize = FALSE, iters.n = 30)
+```
+
+```{r}
+bayes_opt <- addIterations(bayes_opt, iters.n = 20)
+```
+
+
+```{r}
+bayes_opt_lambda <- getBestPars(bayes_opt)$lambda
+bayes_opt_alpha <- getBestPars(bayes_opt)$alpha
+cap_model2 <- cap_optim(train_X, train_y, bayes_opt_alpha, bayes_opt_lambda, mu, L, standardize=FALSE)
+cap_model2_beta0 <- cap_model2$beta_0
+cap_model2_beta <- cap_model2$beta
+```
+
+### Prediction Results
+Results how in-sample and out-of-sample MSE for each model
+```{r}
+prediction <- function(X, y, beta0, beta) {
+  pred <- beta0 + X %*% beta
+  mse <- sum((pred - y)^2) / (nrow(X))
+}
+```
+
+```{r}
+enet_loss_in <- prediction(train_X, train_y, enet_beta0, enet_beta)
+cap1_loss_in <- prediction(train_X, train_y, cap_model1_beta0, cap_model1_beta)
+cap2_loss_in <- prediction(train_X, train_y, cap_model2_beta0, cap_model2_beta)
+
+enet_loss_oos <- prediction(test_X, test_y, enet_beta0, enet_beta)
+cap1_loss_oos <- prediction(test_X, test_y, cap_model1_beta0, cap_model1_beta)
+cap2_loss_oos <- prediction(test_X, test_y, cap_model2_beta0, cap_model2_beta)
+
+report <- data.frame(cbind(enet_loss_in, cap1_loss_in, cap2_loss_in,
+                enet_loss_oos, cap1_loss_oos, cap2_loss_oos))
+colnames(report) <- c("Elan IS", "Optimzied Cap IS", "CV Cap IS",
+                      "Elan OOS", "Optimized Cap OOS","CV Cap OOS")
+knitr::kable(report)
+```
+
+
+
+
+
+
+
+
+
+
+

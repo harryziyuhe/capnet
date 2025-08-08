@@ -1,0 +1,137 @@
+---
+title: "Contribution Constrained Regularization"
+output: pdf_document
+bibliography: references.bib 
+date: "2025-06-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, include=FALSE}
+library(glmnet)
+library(lbfgs)
+source("../R/simulate_capnet_data.R")
+source("../R/capnet.R")
+source("../R/cv_capnet.R")
+source("../R/plot_redistribution.R")
+```
+
+### Contribution Cap Regularization
+Consider a linear regression problem with elastic net regularization. THe optimization objective is:
+$$\arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)$$
+
+In many practical applications, it may be desirable to impose additional structure on the model coefficients. For instance, one might want to enforce monotonicity, apply budget constraints, or--our focus here--limit the contribution of each covariates to the final prediction. This is especially relevant in settings where:
+
+ - Multicolinearity must be controlled while preserving model flexibility;
+ - The predicted values feed into downstream decision-making (e.g. as weights or allocations), where overly concentrated contributions are undesirable.
+ 
+We define the contribution of covariates $i$ as the absolute value of the product $\beta_iZ_i$, where $Z_i$ is a data matrix used to evaluate feature contributions, and seek to penalize contributions that exceed a specific upper bound $L_i$. This leads to either a hard-constrained formulation:
+$$\arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)\quad\text{s.t.}\quad \beta_iZ_i\leq L\quad\forall i$$
+or a soft-constrained formulation, where the violation of contribution caps is penalized:
+$$\arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)+\mu\sum_{i=1}^k\Big|\Big|\max\big(0,|\beta_iZ_i|-L\big)\Big|\Big|_p^p$$
+where $k$ is the number of covariates and $L$ is the contribution cap vector. When $p=2$, the cap penalty becomes a sum of squared violations, which is differentiable almost everywhere and easier to optimize compared to an $\mathcal{l}_1$-based formulation. While the overall penalty remains non-smooth due to the $\max(0,\cdot)$, the use of squared penalty reduces sensitivity near the boundary and facilitates convergence with quasi-Newton methods.
+
+This formulation resembles generalized LASSO-type problems [@tibshirani_solution_2011] and constrained penalization frameworks [@james_penalized_2020], but with an important difference: the penalty is applied to the feature contributions, not the coefficients themselves. Because the capped contributions involve data-dependent terms ($\beta_iX_i$) and a non-linear transformation, there is no simple matrix $D$ such that this penalty reduces to a standard form $|\|D\beta\||_1$.
+
+### Optimization Strategy
+The inclusion of the contribution cap penalty renders off-the-shelf solvers like `glmnet` unsuitable. Instead, we turn to general-purpose optimizers:
+
+ - **BFGS or L-BFGS**: While our objective includes non-smooth terms (due to both the $\mathcal{l}_1$ and the cap penalty), quasi-Newton methods often perform well in practice for moderately-sized problems.
+ - **OWL-QN (Orthant-Wise Limited-memory Quasi-Newton)**: Specifically designed for problems with an $\mathcal{l}_1$ term, OWL-QN preserves the convergence efficiency of L-BFGS while accounting for the subgradient structure of the $\mathcal{l}_1$ norm.
+ 
+To align with `glmnet` conventions, we rewrite the loss in a normalized form as
+$$\min_{\beta_0,\beta}\frac{1}{2N}\sum_{i=1}^N\Big(y_i-(\beta_0+x_i^T\beta)\Big)^2+\lambda\bigg[\frac{(1-\alpha)}{2}||\beta||_2^2+\alpha||\beta||_1\bigg]+\mu\sum_{i=1}^k\max\big(0,|\beta_iZ_i|-L\big)^2$$
+
+### Basic Usage of Capnet
+
+To see how capnet works in practice. We first call the data simulator, which generates the X and y matrices, a true beta vector, and a sample contribution cap limit. The default setting produces a input matrix of size 100 $\times$ 20.
+```{r data}
+example <- simulate_capnet_data()
+X <- example$X
+y <- example$y
+n <- nrow(X)
+p <- ncol(X)
+L <- example$L
+beta_init <- rep(0, p + 1)
+```
+
+We then call `capnet.cv` to find the best $\alpha$ and $\lambda$ values through cross-validation. The default method uses 5-fold cross-validation but more complicated split methods can be specified.
+```{r no-penalty}
+capnet.cv1 <- cv.capnet(X, y, 0, L, standardize = FALSE)
+alpha1 <- capnet.cv1$best_alpha
+lambda1 <- capnet.cv1$best_lambda
+capnet.mod1 <- capnet(X, y, alpha = alpha1, lambda = lambda1,
+                 mu = 0, L = L, standardize = FALSE)
+```
+
+```{r results='asis', echo=FALSE}
+cat(sprintf("Best alpha value: %.3f | Best lambda value %.4f", alpha1, lambda1))
+```
+
+```{r penalty}
+capnet.cv2 <- cv.capnet(X, y, 1, L, standardize = FALSE)
+alpha2 <- capnet.cv2$best_alpha
+lambda2 <- capnet.cv2$best_lambda
+capnet.mod2 <- capnet(X, y, alpha = alpha2, lambda = lambda2,
+                 mu = 0.5, L = L, standardize = FALSE)
+```
+
+```{r results='asis', echo=FALSE}
+cat(sprintf("Best alpha value: %.3f | Best lambda value %.4f", alpha2, lambda2))
+```
+
+```{r weights}
+plots <- plot_redistribution(capnet.mod1, capnet.mod2, plot = "raw")
+plots$beta
+plots$contribution
+```
+
+```{r runtime, echo = FALSE}
+print("System runtime for unconstrained 5-fold cross-validation")
+print(system.time(cv.capnet(X, y, mu = 0, L = L, standardize = FALSE)))
+print("System runtime for constrained 5-fold cross-validation")
+print(system.time(cv.capnet(X, y, mu = 1, L = L, standardize = FALSE)))
+print("System runtime for constrained model fit")
+print(system.time(capnet(X, y, alpha = 0.5, lambda = 0.1, mu = 10, L = L, standardize = FALSE)))
+```
+
+### Additional Parameters
+
+#### Standardization
+Similar to `glmnet`, `capnet` also has a `standardize` parameter that is default to `TRUE`. This controls standardization of the `X` and `y` matrices. It is often recommended to scale `X` and `y` terms for elastic net regressions and that also applies to `capnet` as well. The function has been optimized to handle variable scaling such that the penalty term, which is calculated at the original variable scale, is scaled to be in the same unit as the rest of the loss and gradient terms to avoid convergence failure due to unit mismatch. Therefore, the user should supply `newx` and `L` in the same scale as `X` and `y` regardless of the value of the `standardize` parameter.
+
+#### Multiplier
+The `multiplier` parameter in `capnet` controls the scaling applied to feature contributions. It is particularly useful when the contribution cap needs to be evaluated across multiple observations with non-uniform scaling factors for each observation. For example, if the user has a constant contribution limit `L` but wishes to evaluate contributions for several prediction points, each requiring different scaling, `multiplier` can be specified as a $n\times1$ vector of scalars corresponding to each observation. This avoids the need to manually transform `L` into a matrix aligned with each observation. Currently, the implementation does not support `L` as a matrix input, so `multiplier` provides a flexible alternative for handling observation-specific scaling requirements efficiently.
+
+#### Box Constraint
+The `capnet` function also allows users to enforce box constraints on model parameters using the `upper.limits` and `lower.limits` arguments. These specify the maximum and minimum allowable values for each coefficient, respectively. This is useful when prior knowledge or practical considerations dictate that parameter estimates must remain within specific bounds. The box constraints is achieved via gradient masking, and `tol` sets a tolerance threshold for enforcing such box constraints. If a parameter is within `tol` of lower or upper bounds and the current gradient would push it toward the limit, the gradient is manually set to zero for that parameter. The users can thus increase the `tol` variable if default value fails to enforce the box constraint and decrease the `tol` if it restrict parameter updates prematurally.
+
+**Parameter initialization**: Because box constraints are achieved via gradient masking, the initial parameter values `par` needs to be within the specified limits. If initial values fall outside these bounds, optimization may fail to converge or produce invalid results. By default, `par` initializes to zeros, so users should adjust the initialization if zeros fall outside the desired parameter range.
+
+#### Convergence Failure
+Because `capnet` relies on the `lbfgs` package for optimization, convergence failure can be caused by multiple factors and may be hard for users to detect and debug. The `check.finite` parameter can help the user determine whether convergence failure occurred due to non-finite values when calculating loss and gradients. By setting `check.finite=TRUE`, the function will catch and throw non-finite value errors. It is also important to note that the model does not stop or return error even when convergence failed, so users are advised to manually check model convergence after fitting. Because `lbfgs` does not handle and store messages for all convergence failure codes, the message output may not provide useful information on why convergence failed. Generally, when users encounter a $-998$ error code, it is usually that the line search algorithm failed because the gradient values are too unstable.
+
+## Use cases for Contribution Cap Penalty
+### Finance
+ - **Alpha Detection and Portfolio Optimization**: Contribution cap penalties limit the exposure of portfolio weights to individual factors or assets, thereby managing concentration risk and promoting diversification. They are particularly useful in factor investing and risk parity strategies where capping contributions stabilizes portfolio performance and prevents over-reliance on any single factor. Additionally, in stress testing and scenario analysis, contribution caps ensure no covariate yields implausibly large predicted changes, enhancing model robustness under extreme but plausible scenarios.
+ - **Credit Scoring and Lending Models**: In credit risk models, contribution caps ensure that no single borrower attribute (e.g., income, age) disproportionately determines loan approval or rejection. This aligns with regulatory requirements that limit maximum permissible feature influence, thus improving fairness and compliance in lending decisions.
+
+### Social Science
+ - **Fairness**:  Contribution caps can enforce fairness by directly limiting the effective contribution of sensitive or potentially biased features (e.g., race, gender, income proxies) in predictive models, thereby reducing disparate impact and increasing ethical compliance.
+ - **Interpretability**: They facilitate explanation of model decisions by ensuring that influence is more evenly distributed across covariates. This improves stakeholder understanding and trust, especially in policy analysis or public-facing models.
+ 
+### Machine Learning and Statistical Modeling
+ - **Robustness to Outliers**: By limiting the effective contribution (i.e., coefficient times covariate value), contribution caps reduce the influence of extreme covariate values that may destabilize model training and predictions. This is particularly valuable in datasets with fat-tailed distributions or measurement errors.
+ - **Regularization Alternatives**: Unlike traditional L1 (lasso) or L2 (ridge) penalties that penalize coefficient magnitudes, contribution caps directly constrain the realized contribution of covariates to predictions. This yields a different form of regularization, controlling the output impact rather than parameter size, potentially leading to better generalization when variable scales differ greatly or when model stability is paramount.
+ - **Operational Constraints in Production**: In real-world deployment, models may face operational limits on the allowable influence of input variables due to fairness, ethical, or domain-specific constraints. Contribution caps provide a mathematically principled way to enforce these limits within the model training process.
+
+### Healthcare and Natural Science
+ - **Risk Prediction Models in Clinical Settings**: Contribution caps prevent over-reliance on noisy or highly variable clinical measurements, ensuring that risk predictions remain robust and medically interpretable.
+ - **Policy Impact Models in Epidemiology and Public Health**: Caps ensure that estimated effects of policy interventions are not driven by extreme contributions from specific covariates, improving credibility and usability for decision-making.
+ - **Environmental and Climate Modeling**: Limiting influence of extreme input measurements (e.g., pollutant concentrations, temperature anomalies) helps maintain physically plausible predictions and prevents model extrapolation errors in environmental risk assessments.
+
+
+
+
+

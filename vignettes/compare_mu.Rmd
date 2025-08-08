@@ -1,0 +1,177 @@
+---
+title: "Penalty Strength Studies"
+output: pdf_document
+date: "2025-07-02"
+header-includes:
+  - \usepackage{makecell}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(glmnet)
+library(lbfgs)
+library(xtable)
+library(ggplot2)
+source("../R/simulate_capnet_data.R")
+source("../R/capnet.R")
+source("../R/cv_capnet.R")
+source("../R/plot_redistribution.R")
+options(scipen = 0)
+convergence.table <- NULL
+```
+
+### Contribution Cap Penalty
+
+The contribution cap optimizer introduces a new hyperparameter $\mu$ in addition to the $\alpha$ and $\lambda$ parameters of the elastic net fitter. Because the new added contribution cap penalty term is smooth almost everywhere except at the border, a large or ill-conceived $\mu$ value can for the line search algorithm in the underlying Orthant-Wise Limited-memory Quasi Newtonian (OWL-QN) method to fail, resulting in convergence issue. To prevent scaling mismatch between the contribution cap penalty term (which is designed to be in the original scale even when `standardize` is set to `TRUE`), I scale the contribution cap loss and gradient in the same unit as the rest of the loss and gradient functions in the `capnet()` function. Nevertheless, the algorithm can fail under some $\mu$ values, and the users should pay careful attention as the algorithm will not report a warning or error by default. The following code illustrates an example of how the optimizer reacts to different values of $\mu$. Note that the available range of $\mu$ is sensitive to the input data
+
+```{r data}
+example <- simulate_capnet_data()
+X <- example$X
+y <- example$y
+n <- nrow(X)
+p <- ncol(X)
+L <- example$L
+maxx <- t(as.matrix(apply(X, 2, function(x) {
+  mx <- max(x)
+  mn <- min(x)
+  if (abs(mx) > abs(mn)) mx else mn
+})))
+beta_init <- rep(0, p + 1)
+```
+
+The following table shows convergence results with eight different sets of parameter setups. The first model is a regular baseline model. The second model uses a larger $\lambda$ value for greater elastic net penalty. The third model sets $\lambda$ to $0$, removing the L1 and L2 regularization terms. Model 4 and 5 are ridge and LASSO models. Model 6 incorporates a larger multiplier term. Model 7 chooses a smaller contribution cap, forcing the parameters to be even smaller. The last model uses a different evaluation matrix, which takes the maximum absolute value. This forces the model to be essentially under the same constraint but shrinks the number of observation to one.
+
+```{r experiment, results = "asis"}
+for (i in seq(-5, 10)) {
+  # Regular model
+  model1 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence1 <- model1$convergence
+  
+  # Larger lambda model
+  model2 <- capnet(X, y, alpha = 0.5, lambda = 0.5,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence2 <- model2$convergence
+  
+  # No elastic net penalty model
+  model3 <- capnet(X, y, alpha = 0.5, lambda = 0,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence3 <- model3$convergence
+  
+  # Ridge regression model
+  model4 <- capnet(X, y, alpha = 0, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence4 <- model4$convergence
+  
+  # LASSO regression model
+  model5 <- capnet(X, y, alpha = 1, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence5 <- model5$convergence
+  
+  # Large multiplier model
+  model6 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 100)
+  convergence6 <- model6$convergence
+  
+  # Small L model
+  model7 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 mu = 10 ** i, L = L/2, newx = X, standardize = TRUE, multiplier = 1)
+  convergence7 <- model7$convergence
+  
+  # Different `newx` model
+  model8 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = maxx, standardize = TRUE, multiplier = 1)
+  convergence8 <- model8$convergence
+  
+  convergence.table <- rbind(convergence.table,
+                             c(convergence1, convergence2,
+                               convergence3, convergence4,
+                               convergence5, convergence6,
+                               convergence7, convergence8))
+  
+}
+```
+
+```{r table, results = "asis", echo = FALSE, comment = FALSE, message = FALSE}
+convergence.table <- as.data.frame(convergence.table)
+convergence.table <- data.frame(lapply(convergence.table, as.character), stringsAsFactors = FALSE)
+convergence.table <- cbind(10 ** seq(-5,10), convergence.table)
+colnames(convergence.table) <- c(
+  "Mu",
+  "Base",
+  "\\makecell{Large \\\\ Lambda}",
+  "\\makecell{No \\\\ Elastic \\\\ Net}",
+  "Ridge",
+  "LASSO",
+  "\\makecell{Large \\\\ Multiplier}",
+  "Small L",
+  "\\makecell{Single \\\\ Max \\\\ Row}"
+)
+print(xtable(convergence.table, display = c(rep("g", 10))),
+      math.style.exponents = TRUE,
+      sanitize.colnames.function = identity,
+      comment = FALSE)
+```
+
+The table show that the model encounters no convergence failure with most $\mu$ values, but when $\mu$ becomes extremely large (greater than $10^5$ or $10^6$), convergence may fail. It is also worth noting that when the L1 term is dropped in the loss function, the model has trouble converging with smaller values of $\mu$. Changing $\lambda$ and multiplier values do not significantly impact model's ability to converge. Finally, if we force the same contribution cap constraints but aggregate evaluation matrix to one row of observation, the model is more likely to encounter convergence failure with larger $\mu$ values. This is because the optimizer takes an average of all contribution cap excess when calculating the loss and gradient values, so having more observations moderates the strength of contribution cap panelty in each iteration, leading to easier and smoother convergence.
+
+```{r lambda-values}
+lambdas0 <- lambdas10 <- lambdas1000 <- c()
+for (i in 1:50) {
+  lambda0.tmp <- cv.capnet(X, y, mu = 0, L = L, 
+                           alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
+                           newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
+  lambda10.tmp <- cv.capnet(X, y, mu = 10, L = L,
+                            alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
+                            newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
+  lambda1000.tmp <- cv.capnet(X, y, mu = 1000, L = L,
+                              alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
+                              newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
+  lambdas0 <- c(lambdas0, lambda0.tmp)
+  lambdas10 <- c(lambdas10, lambda10.tmp)
+  lambdas1000 <- c(lambdas1000, lambda1000.tmp)
+}
+```
+
+```{r plot-lambda, echo = FALSE}
+best_lambdas <- as.data.frame(rbind(cbind(lambdas0, 0),
+                              cbind(lambdas10, 10),
+                              cbind(lambdas1000, 1000)))
+names(best_lambdas) <- c("lambda", "mu")
+
+ggplot(best_lambdas) +
+  geom_density(aes(x = lambda, color = as.factor(mu))) +
+  scale_x_continuous(trans='log10') +
+  labs(x = "Lambda", y = "Density", color = "mu") +
+  theme_minimal()
+```
+
+Clearly, we see divergence in the optimal $\mu$ value from cross-validation when the contribution cap penalty is activated. This can potentially be explained by the fact that the contribution penalty also restrains the size of the parameters, and by imposing a constraint on the size of the feature contributions, the user is also punishing parameters from being too large. Setting $\lambda$ too large when contribution cap is present may over-penalize the model and lead to worse performances. 
+
+```{r t-test, echo = FALSE}
+print(t.test(lambdas0, lambdas10))
+print(t.test(lambdas10, lambdas1000))
+```
+
+The t-tests also confirm the observation; however, we do not observe meaningful differences in $\lambda$ values between models with $\mu$ values set to $10$ and $1000$ respectively. This means that the optimal $\mu$ value is not as sensitive to the strength of the contribution cap penalty.
+
+```{r}
+capmod1 <- capnet(X, y, alpha = 0.5, lambda = mean(lambdas0),
+                  mu = 100, L = L, newx = maxx)
+capmod2 <- capnet(X, y, alpha = 0.5, lambda = mean(lambdas1000),
+                  mu = 100, L = L, newx = maxx)
+print(capmod1$value / capmod2$value)
+```
+
+The loss is apparently when choosing the less optimal $\lambda$ value. The practical implication fo this is that the user should be cautious using $\lambda$ values derived from functions such as `glmnet` (which conforms with the $\mu=0$ case) when fitting a contribution cap model.
+
+
+
+
+
+
+
+
+
+
+
