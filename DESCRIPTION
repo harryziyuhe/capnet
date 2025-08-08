@@ -1,0 +1,11 @@
+Package: capnet
+Type: Package
+Title: Feature Contribution Cap Elastic Net Model
+Version: 0.1.0
+Date: 2025-08-08
+Author: Harry He
+Maintainer: Harry He <zih028@ucsd.edu>
+Description: Functions to fit elastic net models with customized feature contribution limitation penalties
+Depends: lbfgs, ggplot2
+License: MIT
+RoxygenNote: 7.3.2
