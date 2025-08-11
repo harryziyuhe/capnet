@@ -36,7 +36,7 @@ summary(fit)
 The model solves the following penalized optimization problem:
 
 ```math
-\arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)+\mu\sum_{i=1}^k\Big|\Big|\max\big(0,|\beta_iZ_i|-L\big)\Big|\Big|_2^2
+\arg\min_{\beta}\|Y-X\beta\|_2^2+\lambda\left(\alpha\|\beta\|_1+(1-\alpha)\|\beta\|_2^2\right)+\mu\sum_{i=1}^k\left\|\max\left(0,|\beta_iZ_i|-L\right)\right\|_2^2
 ```
 
 Where:
