@@ -14,7 +14,7 @@
 #' \item {rows}{The row index containing violations of contribution cap.}
 #' \item {excess}{The matrix containing violations of contribution cap.}
 
-check_cap_violations <- function(object, newx = NULL, multiplier = NULL) {
+capnet.violations <- function(object, newx = NULL, multiplier = NULL) {
   if (!is.null(newx)) {
     if (is.null(multiplier)) {
       multiplier <- object$multiplier
