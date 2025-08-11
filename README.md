@@ -34,9 +34,10 @@ summary(fit)
 ## Methodology
 
 The model solves the following penalized optimization problem:
-$$
+
+```math
 \arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)+\mu\sum_{i=1}^k\Big|\Big|\max\big(0,|\beta_iZ_i|-L\big)\Big|\Big|_2^2
-$$
+```
 
 Where:
 - $k$ is the number of covariates and $L$ is the contribution cap vector.
