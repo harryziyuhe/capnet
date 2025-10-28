@@ -1,5 +1,5 @@
 # CAPNET
-*A Contribution-Capped Elastic Net for Robust and Interpretable Prediction
+*A Contribution-Capped Elastic Net for Robust and Interpretable Prediction*
 
 ## Why
 ### Quantitative Finance Use Case
