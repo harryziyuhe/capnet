@@ -1,6 +1,31 @@
-# Feature Contribution Cap Elastic Net Model (CAPNET)
+# CAPNET
+*A Contribution-Capped Elastic Net for Robust and Interpretable Prediction
 
-**capnet** is an R package for fitting regularized linear models with feature contribution caps. It uses the OWL-QN optimizer to minimize a custom penalized objective function and supports user-defined per-feature contribution caps.
+## Why
+### Quantitative Finance Use Case
+In financial modeling, predictive features often exhibit unstable variance and regime-dependent scaling--whether derived from volatility measures, fundamentals, technical ratios, or alternative data. These shifts often reflect real changes in the market structure rather than mere noise.
+
+Traditional regularization methods with L1 and L2 penalties constrain coefficients, not contributions, and therefore cannot directly control how much any single feature drives model predictions. In fact, the coefficient-shrinking behavior of these penalties can inadvertently magnify the dominance of the most predictive or volatile features. When one variable carries disproportionately large variance--especially when such cases are underrepresented in the training sample--it can dominate the prediction output, leading to undesired idiosyncratic exposure. Conceptually, this mirrors porftolio construction: just as excess reliance on a single asset increases portfolio risk, excess reliance on one predictive feature increases model risk.
+
+Other approaches to this problem include winsorization and outlier filtering, but these methods can unintentionally suppress valuable information. Extreme observations, absent measurement errors, often capture regime transitions or structural signals whose magnitudes carry predictive meaning. Moreover, when feature distributions are unknown or non-stationary, fixed winsorization thresholds offer no theoretical guarantee of mitigating single-feature dominance. In practice, experiments I conducted have shown that manually tuning these thresholds consistently performan worse than a principled contribution-based regularization implemented with **capnet**.
+
+**capnet** introduces a new regularization framework that constrains per-feature contributions rather than raw coefficients. This allows a model to learn from the training data while ensuring that no single feature in the evaluation set disproportionately drives predictions, achieving a more robust balance between information retention and risk control.
+
+Mathematically, capnet augments the elastic net objective with contribution caps that impose a tunable soft ceiling on each variable's influence on fitted values. The resulting estimator adapts naturally to heteroskedastic and correlated feature spaces, making it particularly effective for:
+ - Cross-sectional return prediction under shifting feature volatility
+ - Portfolio construction pipelines seeking to avoid concentration from single predictive factors
+
+Developed in collaboration with Hull Tactical Asset Allocation, **capnet** has demonstrated measurable improvements in signal stability and generalization when implemented in medium-frequency market-timing models. It has also demonstrated superior performances when compared to other approaches such as winsorization and outlier filtering.
+
+### General Use Cases
+Originally developed for financial modeling, **capnet** generalizes to any predictive setting where a small number of features can disproportionately influence outcomes.
+
+By explicitly constraining feature contributions, **capnet** promotes fairer and more balanced models, ensuring that predictive power is not overly concentrated in a handful of variables. This property is valuable in contexts such as:
+ - **Social Science**: where hterogeneous covariates can dominate due to skewed distributions
+ - **Health and Biomedical Modeling**: where rare conditions or biomarkers have disproportionate effects but must be handled without arbitrary truncation
+ - **General Statistical Learning**: where observed features are imperfect or noisy realizations of underlying causal variables with high and unstable variance
+
+Across these settings, capnet offers a principled alternative to ad hoc preprocessing methods by controlling feature influence directly within the optimization framework.
 
 ## Installation
 
