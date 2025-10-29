@@ -4,127 +4,209 @@ output: pdf_document
 date: "2025-06-17"
 ---
 
+### Purpose of Vignette
+This vignette demonstrates how \texttt{capnet} works in practice and how it affects model performance in different contexts. Traditional regularization methods like elastic net penalize coefficients, but in many real-world datasets, variables can have unstable variance or sporadic large magnitudes, meaning that a few predictors can dominate the fitted model. By explicitly capping each variable's maximum contribution $|x_j\beta_j|$, \texttt{capnet} provides a way to directly control how much influence each predictor can exert. This vignette compares standard elastic net, the standard \texttt{capnet} model, and a walk-forward \texttt{capnet} model designed for time-series data and greater stability.
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, message=FALSE, includ=FALSE}
+```{r, message=FALSE, include=FALSE}
 library(glmnet)
 library(lbfgs)
-library(ParBayesianOptimization)
-source("R\\cap_optim.R")
-source("R\\tune_cap_optim.R")
+library(xts)
+library(knitr)
+source("../R/capnet.R")
+source("../R/cv_capnet.R")
+source("../R/walk_capnet.R")
 ```
 
-Generate sample data for linear regression
-```{r}
-set.seed(123)
-data(QuickStartExample)
-X <- QuickStartExample$x[,1:5]
-y <- QuickStartExample$y
-y <- scale(y)
+```{r, include=FALSE}
+simulate_simple_proxy <- function(
+  n = 1200, p = 8,
+  sparsity = 0.5,          # zeros in beta (on Z -> Y)
+  z_sd = 1,                # scale of Z
+  eps_sd = 1,              # noise in Y
+  unstable_idx = NULL,     # which X columns have unstable variance
+  unstable_frac = 0.25,    # used only if unstable_idx is NULL
+  a_sd = 0.3,              # multiplicative scaling variation a_j
+  sigma_low = 1.0,         # base noise sd for X
+  sigma_high = 8.0,        # high noise sd for unstable features
+  high_prob = 0.10,        # P(sigma_high) per observation for unstable features
+  seed = 2025
+) {
+  set.seed(seed)
 
-shuffle <- sample(1:nrow(X))
-X <- X[shuffle,]
-y <- y[shuffle,,drop = FALSE]
+  # 1) Latent drivers Z
+  Z <- matrix(rnorm(n * p, sd = z_sd), n, p)
 
-n <- nrow(X)
-p <- ncol(X)
+  # 2) True beta and outcome Y
+  beta <- rnorm(p)
+  if (sparsity > 0) beta[sample(1:p, floor(sparsity * p))] <- 0
+  y <- drop(Z %*% beta + rnorm(n, sd = eps_sd))
 
-split <- floor(n * 0.8)
-train_X <- X[1:split,]
-train_y <- y[1:split,,drop = FALSE]
-test_X <- X[(split+1):n,]
-test_y <- y[(split+1):n,,drop = FALSE]
-mu <- 100
-L <- runif(p, 0.8, 1.2)
-```
+  # 3) Linear link from Z to X with per-feature scale a_j
+  a <- exp(rnorm(p, mean = 0, sd = a_sd))  # mild variation
+  mean_part <- sweep(Z, 2, a, `*`)
 
-Train the best elastic net model and cap the contributions
-```{r}
-alphas <- c(0, 0.2, 0.4, 0.6, 0.8, 1)
-best_alpha <- 0
-best_lambda <- 0
-best_loss <- Inf
-
-for (alpha in alphas) {
-  enet.cv <- cv.glmnet(train_X, train_y, alpha=alpha)
-  lambda_enet <- enet.cv$lambda.min
-  enet.x <- glmnet(train_X, train_y, alpha=alpha, lambda=lambda_enet)
-  loss <- sum(predict(enet.x, train_X) - train_y) ^ 2
-  if (loss < best_loss) {
-    best_alpha <- alpha
-    best_lambda <- lambda_enet
-    best_loss <- loss
+  # 4) Decide which columns in X have unstable variance
+  if (is.null(unstable_idx)) {
+    k <- max(1, round(unstable_frac * p))
+    unstable_idx <- sort(sample(seq_len(p), k, replace = FALSE))
   }
-}
-best_enet <- glmnet(train_X, train_y, alpha=best_alpha, lambda=best_lambda)
-enet_beta0 <- coef(best_enet)[1]
-enet_beta <- coef(best_enet)[-1]
-original_pred_mean <- sum(enet_beta * colMeans(train_X))
-for (i in seq_along(enet_beta)) {
-  if (abs(enet_beta[i] * max(train_X[,i])) > L[i]) {
-    enet_beta[i] <- (L[i] / max(train_X[, i])) * sign(enet_beta[i])
+  stable_idx <- setdiff(seq_len(p), unstable_idx)
+
+  # 5) Build noise matrix Eta
+  Eta <- matrix(rnorm(n * p, sd = sigma_low), n, p)  # start with stable noise
+  if (length(unstable_idx) > 0) {
+    # For unstable cols, each row flips to high variance with prob = high_prob
+    flips <- matrix(rbinom(n * length(unstable_idx), 1, high_prob), n, length(unstable_idx))
+    sd_mat <- sigma_low + flips * (sigma_high - sigma_low)
+    Eta[, unstable_idx] <- matrix(rnorm(n * length(unstable_idx)), n, length(unstable_idx)) * sd_mat
   }
-}
-new_pred_mean <- sum(enet_beta * colMeans(train_X))
-enet_beta0 <- enet_beta0 + (original_pred_mean - new_pred_mean)
-```
 
-Optimize a capped model using the alpha and lambda obtained from elastic net cross-validation
-```{r}
-alpha <- best_alpha
-lambda <- best_lambda
-cap_model1 <- cap_optim(train_X, train_y, alpha, lambda, mu, L, standardize=FALSE)
-cap_model1_beta0 <- cap_model1$beta_0
-cap_model1_beta <- cap_model1$beta
-```
+  # 6) Observed proxies: X = a*Z + Eta
+  X <- mean_part + Eta
 
-Cross-validation and Bayesian optimization of the capped model
-```{r}
-bayes_opt <- tune_cap_optim(train_X, train_y, alpha = c(0, 1), lambda = c(0, 1), mu, L, standardize = FALSE, iters.n = 30)
-```
-
-```{r}
-bayes_opt <- addIterations(bayes_opt, iters.n = 20)
-```
-
-
-```{r}
-bayes_opt_lambda <- getBestPars(bayes_opt)$lambda
-bayes_opt_alpha <- getBestPars(bayes_opt)$alpha
-cap_model2 <- cap_optim(train_X, train_y, bayes_opt_alpha, bayes_opt_lambda, mu, L, standardize=FALSE)
-cap_model2_beta0 <- cap_model2$beta_0
-cap_model2_beta <- cap_model2$beta
-```
-
-### Prediction Results
-Results how in-sample and out-of-sample MSE for each model
-```{r}
-prediction <- function(X, y, beta0, beta) {
-  pred <- beta0 + X %*% beta
-  mse <- sum((pred - y)^2) / (nrow(X))
+  list(X = X, y = y, Z = Z, beta = beta, a = a,
+       unstable_idx = unstable_idx, stable_idx = stable_idx)
 }
 ```
 
-```{r}
-enet_loss_in <- prediction(train_X, train_y, enet_beta0, enet_beta)
-cap1_loss_in <- prediction(train_X, train_y, cap_model1_beta0, cap_model1_beta)
-cap2_loss_in <- prediction(train_X, train_y, cap_model2_beta0, cap_model2_beta)
-
-enet_loss_oos <- prediction(test_X, test_y, enet_beta0, enet_beta)
-cap1_loss_oos <- prediction(test_X, test_y, cap_model1_beta0, cap_model1_beta)
-cap2_loss_oos <- prediction(test_X, test_y, cap_model2_beta0, cap_model2_beta)
-
-report <- data.frame(cbind(enet_loss_in, cap1_loss_in, cap2_loss_in,
-                enet_loss_oos, cap1_loss_oos, cap2_loss_oos))
-colnames(report) <- c("Elan IS", "Optimzied Cap IS", "CV Cap IS",
-                      "Elan OOS", "Optimized Cap OOS","CV Cap OOS")
-knitr::kable(report)
+```{r include=FALSE}
+prepare_data <- function(data_source = c("quickstart","proxy")) {
+  data_source <- match.arg(data_source)
+  if (data_source == "quickstart") {
+    data(QuickStartExample, package = "glmnet")
+    X <- QuickStartExample$x[, 1:5]
+    y <- QuickStartExample$y
+  } else {
+    sim <- simulate_simple_proxy(
+      n = 1200, p = 8, unstable_frac = 0.10,
+      sigma_low = 1.0, sigma_high = 8.0, high_prob = 0.10, seed = 2025)
+    X <- sim$X
+    y <- sim$y
+  }
+  y <- scale(y)
+  set.seed(123)
+  shuffle <- sample(seq_len(nrow(X)))
+  X <- X[shuffle, ]
+  y <- y[shuffle, , drop = FALSE]
+  
+  n <- nrow(X)
+  split <- floor(n * 0.8)
+  train_X <- X[1:split, ]
+  train_y <- y[1:split, , drop = FALSE]
+  test_X <- X[(split + 1):n, ]
+  test_y <- y[(split + 1):n, , drop = FALSE]
+  
+  mu <- 100
+  if (data_source == "quickstart") {
+    L <- runif(ncol(X), 0.8, 1.2)
+  } else {
+    kappa <- 0.1
+    L <- kappa * apply(abs(train_X), 2, function(v) stats::quantile(v, 0.99))
+  }
+  list(train_X = train_X, train_y = train_y, test_X = test_X, test_y = test_y, L = L, mu = mu)
+}
 ```
 
+```{r include = FALSE}
+fit_models <- function(train_X, train_y, test_X, L, mu) {
+  alphas <- c(0, 0.2, 0.4, 0.6, 0.8, 1)
+  best_alpha <- 0
+  best_lambda <- 0
+  best_loss <- Inf
+  
+  for (alpha in alphas) {
+    enet.cv <- cv.glmnet(train_X, train_y, alpha=alpha)
+    lambda_enet <- enet.cv$lambda.min
+    enet.x <- glmnet(train_X, train_y, alpha=alpha, lambda=lambda_enet)
+    loss <- sum(predict(enet.x, train_X) - train_y) ^ 2
+    if (loss < best_loss) {
+      best_alpha <- alpha
+      best_lambda <- lambda_enet
+      best_loss <- loss
+    }
+  }
+  best_enet <- glmnet(train_X, train_y, alpha=best_alpha, lambda=best_lambda)
+  enet_beta0 <- coef(best_enet)[1]
+  enet_beta <- coef(best_enet)[-1]
+  original_pred_mean <- sum(enet_beta * colMeans(train_X))
+  for (i in seq_along(enet_beta)) {
+    if (abs(enet_beta[i] * max(train_X[,i])) > L[i]) {
+      enet_beta[i] <- (L[i] / max(train_X[, i])) * sign(enet_beta[i])
+    }
+  }
+  new_pred_mean <- sum(enet_beta * colMeans(train_X))
+  enet_beta0 <- enet_beta0 + (original_pred_mean - new_pred_mean)
+  
+  cap1 <- capnet(train_X, train_y, best_lambda, best_alpha, mu, L, standardize=FALSE)
+  cap2 <- capnet.walk(train_X, train_y, best_lambda, best_alpha, mu, L, test_X, standardize=FALSE)
+  
+  list(
+    enet = list(beta0 = enet_beta0, beta = enet_beta),
+    cap1 = list(beta0 = cap1$a0, beta = cap1$beta),
+    cap2 = cap2
+  )
+}
+
+mse_from_beta <- function(X, y, beta0, beta) {
+  pred <- as.numeric(beta0 + X %*% beta)
+  mean((pred - as.numeric(y)) ^ 2)
+}
+
+mse_from_pred <- function(pred, y) {
+  mean((as.numeric(pred) - as.numeric(y)) ^ 2)
+}
+```
+
+### Standard Well-Behaved Data
+The first example uses quick start example data from \texttt{glmnet}. Theoretically, we expect all models to perform similarly as all features are well-behaving and should rarely trigger large contribution penalties in the \texttt{capnet} model. 
 
 
+```{r}
+ds_qs <- prepare_data("quickstart")
+fits_qs <- fit_models(ds_qs$train_X, ds_qs$train_y, ds_qs$test_X, ds_qs$L, ds_qs$mu)
+
+qs_enet_is <- mse_from_beta(ds_qs$train_X, ds_qs$train_y, fits_qs$enet$beta0, fits_qs$enet$beta)
+qs_cap1_is <- mse_from_beta(ds_qs$train_X, ds_qs$train_y, fits_qs$cap1$beta0, fits_qs$cap1$beta)
+
+qs_enet_oos <- mse_from_beta(ds_qs$test_X, ds_qs$test_y, fits_qs$enet$beta0, fits_qs$enet$beta)
+qs_cap1_oos <- mse_from_beta(ds_qs$test_X, ds_qs$test_y, fits_qs$cap1$beta0, fits_qs$cap1$beta)
+qs_cap2_oos <- mse_from_pred(fits_qs$cap2$predictions, ds_qs$test_y)
+
+report_qs <- data.frame(
+  Model = c("Elan", "Optimized Cap", "Walk Cap"),
+  IS = c(qs_enet_is, qs_cap1_is, NA),
+  OOS = c(qs_enet_oos, qs_cap1_oos, qs_cap2_oos)
+)
+kable(report_qs, digits = 6)
+```
+
+The in sample (IS) and out of sample (OOS) mean squared errors (MSE) show that the elastic net model and the standard \texttt{capnet} model have similar IS and OOS performances. The walk forward model achieved better OOS performance, which can be attributed to it being more adapted to each out of sample observation. This comes at higher time complexity and the absence of a single trained model that best capture the relationship between the feature and target variables.
+
+### Synthetic Data (Unstable Variance Features)
+To illustrate the strength of the \texttt{capnet} model, I construct a synthetic dataset based on the latent data-generating process $Z\rightarrow Y$. In this setup, the true predictors $Z$ drive the outcome, but only a noisy proxy $X$ is observed. Importantly, some variables in $X$ exhibit unstable and high variance, occasionally taking on extreme values. Under these conditions, both the Optimized Cap and Walk Cap models outperform the standard elastic net, with the walk-forward implementation achieving the greatest improvement in generalization. These results demonstrate how \texttt{capnet}’s contribution-based constraints effectively limit the influence of high-variance features that might otherwise distort model predictions.
+
+```{r}
+ds_px <- prepare_data("proxy")
+fits_px <- fit_models(ds_px$train_X, ds_px$train_y, ds_px$test_X, ds_px$L, ds_px$mu)
+
+px_enet_is <- mse_from_beta(ds_px$train_X, ds_px$train_y, fits_px$enet$beta0, fits_px$enet$beta)
+px_cap1_is <- mse_from_beta(ds_px$train_X, ds_px$train_y, fits_px$cap1$beta0, fits_px$cap1$beta)
+
+px_enet_oos <- mse_from_beta(ds_px$test_X, ds_px$test_y, fits_px$enet$beta0, fits_px$enet$beta)
+px_cap1_oos <- mse_from_beta(ds_px$test_X, ds_px$test_y, fits_px$cap1$beta0, fits_px$cap1$beta)
+px_cap2_oos <- mse_from_pred(fits_px$cap2$predictions, ds_px$test_y)
+
+report_px <- data.frame(
+  Model = c("Elan", "Optimized Cap", "Walk Cap"),
+  IS = c(px_enet_is, px_cap1_is, NA),
+  OOS = c(px_enet_oos, px_cap1_oos, px_cap2_oos)
+)
+kable(report_px, digits = 6)
+```
 
 
 

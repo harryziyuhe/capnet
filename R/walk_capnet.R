@@ -70,6 +70,7 @@ capnet.walk <- function(X, y, lambda, alpha, mu, L, newx,
     y_center <- attr(y_scaled, "scaled:center")
     y_scale <- attr(y_scaled, "scaled:scale")
   } else {
+    p <- ncol(X)
     X_scaled <- X
     X_center <- rep(0, p)
     X_scale <- rep(1, p)
@@ -87,6 +88,7 @@ capnet.walk <- function(X, y, lambda, alpha, mu, L, newx,
     newx.tmp <- matrix(newx[start_row:(end_row-1), ], nrow = m)
     multiplier.tmp <- as.numeric(multiplier)[start_row:(end_row-1)]
     convergence.tmp <- -999
+    mu.tmp = mu
     while (convergence.tmp < 0) {
       capnet_results <- capnet(X_scaled, y_scaled, lambda = lambda, alpha = alpha,
                                mu = mu.tmp, L = L, newx = newx.tmp, 
@@ -100,8 +102,8 @@ capnet.walk <- function(X, y, lambda, alpha, mu, L, newx,
     }
     intercepts[start_row:(end_row-1)] <- capnet_results$a0
     betas <- rbind(betas, matrix(rep(capnet_results$beta, m), nrow = m))
-    contributions <- rbind(contributions, capnet_results$contributions)
-    predictions[start_row:(end_row-1)] <- rowSums(capnet_results$contributions) + capnet_results$a0
+    contributions <- rbind(contributions, capnet_results$feature_contributions)
+    predictions[start_row:(end_row-1)] <- rowSums(capnet_results$feature_contributions) + capnet_results$a0
     mu_values[start_row:(end_row-1)] <- capnet_results$mu
   }
   
@@ -114,15 +116,15 @@ capnet.walk <- function(X, y, lambda, alpha, mu, L, newx,
     colnames(intercepts) <- "intercept"
     colnames(betas) <- colnames(contributions) <- colnames(X)
     colnames(predictions) <- "prediction"
-    colnames(mu_vaues) <- "mu"
+    colnames(mu_values) <- "mu"
   } else {
-    intercept <- matrix(intercept, ncol = 1)
+    intercepts <- matrix(intercepts, ncol = 1)
     predictions <- matrix(predictions, ncol = 1)
     mu_values <- matrix(mu_values, ncol = 1)
     colnames(intercepts) <- "intercept"
     colnames(betas) <- colnames(contributions) <- colnames(X)
     colnames(predictions) <- "prediction"
-    colnames(mu_vaues) <- "mu"
+    colnames(mu_values) <- "mu"
   }
   
   structure(list(

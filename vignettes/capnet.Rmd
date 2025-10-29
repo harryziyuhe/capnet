@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, include=FALSE}
 library(glmnet)
 library(lbfgs)
+library(ggplot2)
 source("../R/simulate_capnet_data.R")
 source("../R/capnet.R")
 source("../R/cv_capnet.R")

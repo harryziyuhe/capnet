@@ -126,7 +126,6 @@ cv.capnet <- function(X, y,
   }
   
   mean_errors <- apply(cv_errors, c(1, 2), mean, na.rm = TRUE)
-  mean_glmnet_errors <- apply(glmnet_errors, c(1, 2), mean, na.rm = TRUE)
   best_idx <- which(mean_errors == min(mean_errors, na.rm = TRUE), arr.ind = TRUE)[1,]
   
   structure(list(
