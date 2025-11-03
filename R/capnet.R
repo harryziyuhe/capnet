@@ -1,57 +1,88 @@
-#' Fit a linear model with elasticnet and contribution cap regularization
+#' Fit a linear model with elastic net and contribution cap regularization
 #' 
-#' Fit a linear model with via penalized maximum likelihood. The function uses 
-#' limited memory BFGS (L-BFGS) when L1 regularization is absent and Orthant-Wise
-#' Limited-memory Quasi-Newton (OWL-QN) when L1 regularization is present.
+#' Fits a penalized linear model by maximum likelihood with an elastic net penalty
+#' and an additional penalty that caps per-feature contributions. The optimizer
+#' uses limited memory BFGS (L-BFGS) when there is no L1 component and
+#' Orthant-Wise Limited-Memory Quasi-Newton (OWL-QN) when L1 regularization is
+#' present. 
 #' 
-#' @import lbfgs
+#' @importFrom lbfgs lbfgs
 #' 
-#' @param X input matrix
-#' @param y response variable
-#' @param lambda the strength of the elasticnet regularizer
-#' @param alpha the elasticnet mixing parameter. `alpha=1` collapses to the 
-#' LASSO penalty and `alpha=0` the ridge penalty
-#' @param mu the strength of the contribution cap regularizer
-#' @param L contribution ceiling. If set to a single value the same ceiling is
-#' applied to all parameters
-#' @param newx data used to evaluate and apply the contribution caps. If unspecified
-#' default to the input matrix. 
-#' @param par A numeric vector containing the initial values for all variables. 
-#' If unspecified default to zero initialization.
-#' @param multiplier A numeric value or vector used for scaling feature contribution
-#' @param intercept flag for whether the intercept should be fitted. Default to
-#' `intercept=TRUE`
-#' @param standardize flag for standardization of the `x` and `y` variables.
-#' The coefficients are always returned on the original scale. Default is 
-#' `standardize=TRUE`
-#' @param lower.limits A numeric value or vector containing lower bounds for fitted
-#' parameters. The initialized values must be above the `lower.limits`.
-#' @param upper.limits A numeric value or vector containing upper bounds for fitted
-#' parameters. The initialized values must be below the `upper.limits`.
-#' @param tol The tolerance parameter for gradient masking when `lower.limits` or
-#' `upper.limits` are specified.
-#' @param maxit Maximum number of passes over the data. Default is 10^5
-#' @param check.finite Catch and report errors in loss and gradient calculation. 
-#' Default to `check.finite=FALSE`
-#' @param verbose Defaults to 0. Set to 1 to show console outputs during optimization.
+#' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
+#'  features and rows are observations.
+#' @param y Numeric response vector of length \eqn{n}.
+#' @param lambda Nonnegative numeric scalar; overall strength of the elastic-net 
+#'  penalty. 
+#' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
+#'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
+#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty
+#' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
+#'  contribution ceiling(s). If scalar, the same ceiling is applied to all
+#'  coefficients
+#' @param newx Optional numeric matrix with \eqn{p} columns used to evaluate and 
+#'  enforce contribution caps. If \code{NULL}, defaults to \code{X}.
+#' @param par Optional numeric vector of length \eqn{p} with initial coefficient
+#'  values. If \code{NULL}, uses zero initialization. 
+#' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
+#'  scale feature contributions during the capping step. Defaults to 1.
+#' @param intercept Logical; should an intercept be fitted? Default \code {TRUE}.
+#' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
+#'  are standardized for fitting; coefficients are returned on the original scale.
+#'  Default \code{TRUE}.
+#' @param lower.limits Optional numeric scalar or length-\eqn{p} vector of lower
+#'  bounds on coefficients. Initial values must satisfy the bounds.
+#' @param upper.limits Optional numeric scalar or length-\eqn{p} vector of upper
+#'  bounds on coefficients. Initial values must satisfy the bounds. 
+#' @param tol Nonnegative numeric tolerance used for gradient masking when 
+#'  \code{lower.limits} or \code{upper.limits} are specified. Default \code{1e-8}.
+#' @param maxit Integer; maximum number of quasi-Newton iterations. Default 
+#'  \code{1e5}.
+#' @param check.finite Logical; if \code{TRUE}, detect and report non-finite
+#'  values encountered in the loss/gradient. Default \code{FALSE}.
+#' @param verbose Integer; \code{0} for silent, \code{1} to print optimization
+#'  progress. Default \code{0}.
 #' 
-#' @return A list with the following components:
-#' \item{a0}{Best intercept value.}
-#' \item{beta}{A numerical array. The best set of parameters found.}
-#' \item{convergence}{An integer code. Zero indicates that convergence was
-#' reached without issues. Negative values indicate errors in the execution of 
-#' the OWL-QN routine.}
-#' \item{message}{A character object dealing with execution error. Only returned
-#' if the convergence code is different from zero.}
-#' \item{value}{The minimized value of the objective function.}
-#' \item{feature_contributions}{A numerical matrix recording the contributions of
-#' each covariate.}
-#' \item{alpha}{The elastic net mixing parameter}
-#' \item{lambda}{The elastic net penalty strength specified in the model.}
-#' \item{mu}{The contribution cap penalty strength specified in the model.}
-#' \item{L}{The contribution cap specified in the model.}
-#' \item{multiplier}{The scalar multiplier specified when calculating feature contributions.}
-#' \item{call}{The call that produced this object.}
+#' @return An object of class \code{"capnet"} with components:
+#' \itemize{
+#'  \item \code{a0} Best intercept (numeric scalar).
+#'  \item \code{beta} Numeric vector (length \eqn{p}); fitted coefficients.
+#'  \item \code{value} Numeric; minimized objective value.
+#'  \item \code{feature_contributions} Numeric matrix of shape
+#'    \eqn{n_{\mathrm{new}}\times p} giving per-feature contributions evaluated
+#'    on \code{newx} (rows) for each feature (columns).
+#'  \item \code{newx} The evaluation matrix.
+#'  \item \code{convergence} Integer code; \code{0} indicates successful
+#'    convergence, negative values indicate OWL-QN/L-BFGS execution errors.
+#'  \item \code{message} Character string describing any optimizer message 
+#'    (present if \code{convergence != 0})
+#'  \item \code{alpha}, \code{lambda}, \code{mu}, \code{L}, \code{multiplier}
+#'    Echoed tuning parameters.
+#'  \item \code{call} The matched call.
+#' }
+#' 
+#' @details
+#' When \code{alpha > 0} and \code{\lambda > 0}, OWL-QN is used to handle the L1
+#' component; otherwise L-BFGS is used. Box constraints are enforced via masked
+#' gradients with tolerance \code{tol}. If \code{standardize = TRUE}, the model
+#' is fit on standardized variables and coefficients are mapped back to the
+#' original scale on return.
+#' 
+#' Note that standardization is not recommended when a non-unit \code{multiplier}
+#' is supplied, as the scaling step may distort the intended effect of the 
+#' multiplier on feature contributions.
+#' 
+#' @seealso [predict.capnet()], [coef.capnet()]
+#' 
+#' @examples
+#' set.seed(1)
+#' n <- 40; p <- 8
+#' X <- matrix(rnorm(n * p), n, p)
+#' beta <- c(2, 1.5, rep(0, p-2))
+#' y <- X %*% beta + rnorm(n)
+#' fit1 <- capnet(X, as.numeric(y), lambda = 0.1, alpha = 0.5, mu = 1, L = 2)
+#' 
+#' # Box constraints
+#' fit2 <- capnet(X, as.numeric(y), lambda = 0.1, alpha = 0.5, mu = 1, L = 2, lower.limits = 0)
 #' 
 #' @export
 
@@ -251,11 +282,11 @@ capnet <- function(X, y, lambda, alpha,
   structure(list(
     a0 = a0,
     beta = beta_rest,
+    value = value,
+    feature_contributions = contributions,
     newx = newx,
     convergence = model$convergence,
     message = model$message,
-    value = value,
-    feature_contributions = contributions,
     alpha = alpha,
     lambda = lambda,
     mu = mu,

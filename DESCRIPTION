@@ -1,11 +1,27 @@
 Package: capnet
 Type: Package
-Title: Feature Contribution Cap Elastic Net Model
+Title: Contribution-Capped Elastic Net Model for Stable Feature Contributions
 Version: 0.1.0
-Date: 2025-08-08
-Author: Harry He
-Maintainer: Harry He <zih028@ucsd.edu>
-Description: Functions to fit elastic net models with customized feature contribution limitation penalties
-Depends: lbfgs, ggplot2
-License: MIT
+Date: 2025-11-03
+Authors@R: c(
+    person("Harry", "He", email = "zih028@ucsd.edu", role = c("aut", "cre")),
+    person("Petri", "Fast", role = c("aut"))
+)
+Description: Implements contribution-capped regularization to directly bound per-feature contributions in predictive models. Includes OWL-QN optimization, cross-validation, walk-forward fitting and prediction, and plotting utilities. 
+URL: https://github.com/harryziyuhe/capnet
+BugReports: https://github.com/harryziyuhe/capnet/issues
+Depends:
+    R (>= 4.1)
+Imports:
+    stats,
+    Matrix,
+    lbfgs,
+    ggplot2,
+    xts
+Suggests:
+    knitr,
+    rmarkdown,
+    xtable
+    glmnet
+VignetteBuilder: knitr
 RoxygenNote: 7.3.2

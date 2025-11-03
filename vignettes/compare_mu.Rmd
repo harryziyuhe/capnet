@@ -118,13 +118,13 @@ The table show that the model encounters no convergence failure with most $\mu$ 
 ```{r lambda-values}
 lambdas0 <- lambdas10 <- lambdas1000 <- c()
 for (i in 1:50) {
-  lambda0.tmp <- cv.capnet(X, y, mu = 0, L = L, 
+  lambda0.tmp <- cv_capnet(X, y, mu = 0, L = L, 
                            alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
                            newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
-  lambda10.tmp <- cv.capnet(X, y, mu = 10, L = L,
+  lambda10.tmp <- cv_capnet(X, y, mu = 10, L = L,
                             alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
                             newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
-  lambda1000.tmp <- cv.capnet(X, y, mu = 1000, L = L,
+  lambda1000.tmp <- cv_capnet(X, y, mu = 1000, L = L,
                               alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
                               newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
   lambdas0 <- c(lambdas0, lambda0.tmp)

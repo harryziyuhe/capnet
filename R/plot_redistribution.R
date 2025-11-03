@@ -1,33 +1,56 @@
-#' Plot Redistribution of Coefficients and Contributions
+#' Plot redistribution of coefficients and contributions
+#' 
+#' Compares regression coefficients and per-feature contributions between an
+#' uncapped and a capped \code{capnet} fit. Produces either side-by-side
+#' ("raw") bar charts of levels or ("delta") bar charts of changes.
 #'
-#' Generates side-by-side or delta bar plots comparing the regression coefficients and 
-#' feature contributions between an uncapped and capped \code{capnet} model.
+#' @importFrom ggplot2 ggplot aes geom_col geom_bar coord_flip labs theme_minimal
 #'
-#' @import ggplot2
+#' @param uncapped An object returned by \code{capnet()} fit without a 
+#'  contribution cap(i.e., \code{mu = 0} or large \code{L}).
+#' @param capped An object returned by \code{capnet()} fit with contribution
+#'  caps applied.
+#' @param X Optional numeric matrix of features used to compute contributions.
+#'  If \code{NULL}, the function tries \code{capped$newx}.
+#' @param multiplier Optional numeric scalar or length-\eqn{n} vector of 
+#'  multipliers to scale contributions. If \code{NULL}, uses 
+#'  \code{capped$multiplier} when available; otherwise defaults to 1.
+#' @param top_n Integer (\eqn{\ge 1}) or \code{Inf}. Number of features to 
+#'  display. Features are ordered by input column order; set \code{top_n = Inf}
+#'  to include all.
+#' @param plot Character string, one of \code{"raw"} or \code{"delta"}.
+#'  If \code{"raw"}, shows side-by-side bar charts of coefficients and
+#'  contributions for each fit. If \code{"delta"}, shows bar charts of the
+#'  capped minus uncapped changes.
 #'
-#' @param uncapped An object returned by \code{capnet()} without contribution caps.
-#' @param capped An object returned by \code{capnet()} with contribution caps applied.
-#' @param X Optional matrix of features to use when computing contributions. 
-#'   Defaults to \code{capped\$newx}.
-#' @param multiplier Optional vector of scaling multipliers for contributions. If not 
-#'   provided, uses \code{capped\$multiplier}.
-#' @param top_n Integer. Number of top features (by appearance order) to include in the plots. 
-#'   Use \code{Inf} to include all features.
-#' @param plot One of \code{"raw"} or \code{"delta"}. If \code{"raw"}, shows side-by-side 
-#'   bar charts of beta and contribution values. If \code{"delta"}, shows bar charts of 
-#'   changes in beta and contributions.
-#' @return If \code{plot = "delta"}, returns a combined plot using \pkg{patchwork} or \pkg{gridExtra}.
-#'   If \code{plot = "raw"}, the function creates and prints two separate \code{ggplot2} plots.
-#' @details Contributions are calculated as the elementwise product of \code{X}, \code{beta},
-#'   and \code{multiplier}. If \code{standardize = TRUE} was used during training, \code{multiplier}
-#'   typically adjusts for scaling.
-#' @import ggplot2
-#' @examples
-#' \dontrun{
-#' fit1 <- capnet(X, y, lambda = 0, mu = 0, L = rep(0.1, ncol(X)))  # uncapped
-#' fit2 <- capnet(X, y, lambda = 1, mu = 0.5, L = rep(0.1, ncol(X))) # capped
-#' plot_redistribution(fit1, fit2, plot = "delta", top_n = 20)
+#' @return A list of two \code{ggplot} objects, which are also printed::
+#' \describe{
+#'   \item{\code{p1}}{If \code{plot = "raw"}: side-by-side bar chart of
+#'     coefficients for uncapped vs capped models. If \code{plot = "delta"}:
+#'     bar chart of changes in coefficients (\code{capped - uncapped}).}
+#'   \item{\code{p2}}{If \code{plot = "raw"}: side-by-side bar chart of
+#'     contributions for uncapped vs capped models. If \code{plot = "delta"}:
+#'     bar chart of changes in contributions (\code{capped - uncapped}).}
 #' }
+#' The function prints both plots and invisibly returns the list
+#' \code{list("beta" = p1, "contribution" = p2)}
+#' 
+#' @details
+#' Contributions are calculated as column-wise products
+#' \eqn{contrib_j=\mathrm{mean}(X_{\cdot j})\times\beta_j\times multiplier_j}.
+#' 
+#' @seealso [capnet()]
+#' 
+#' @examples
+#' set.seed(1)
+#' n <- 40; p <- 6
+#' X <- matrix(rnorm(n * p), n, p)
+#' beta <- c(1.5, 0.8, 0.2, rep(0, p - 3))
+#' y <- as.numeric(X %*% beta + rnorm(n))
+#' fit_uncap <- capnet(X, y, lambda = 0.05, alpha = 0.5, mu = 0, L = 1)
+#' fit_cap   <- capnet(X, y, lambda = 0.05, alpha = 0.5, mu = 1, L = 1)
+#' plot_redistribution(fit_uncap, fit_cap, plot = "delta")
+#' 
 #' @export
 
 plot_redistribution <- function(uncapped, capped, X = NULL,
@@ -48,6 +71,10 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
   
   mean_contribution_uncapped <- colMeans(contribution_uncapped)
   mean_contribution_capped <- colMeans(contribution_capped)
+  
+  if (is.null(colnames(X))) {
+    colnames(X) <- paste0("V", seq_len(ncol(X)))
+  }
   
   df <- data.frame(
     variable = colnames(X),

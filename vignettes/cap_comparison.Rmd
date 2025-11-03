@@ -142,7 +142,7 @@ fit_models <- function(train_X, train_y, test_X, L, mu) {
   enet_beta0 <- enet_beta0 + (original_pred_mean - new_pred_mean)
   
   cap1 <- capnet(train_X, train_y, best_lambda, best_alpha, mu, L, standardize=FALSE)
-  cap2 <- capnet.walk(train_X, train_y, best_lambda, best_alpha, mu, L, test_X, standardize=FALSE)
+  cap2 <- walk_capnet(train_X, train_y, best_lambda, best_alpha, mu, L, test_X, standardize=FALSE)
   
   list(
     enet = list(beta0 = enet_beta0, beta = enet_beta),

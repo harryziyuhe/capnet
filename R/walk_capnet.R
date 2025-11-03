@@ -1,47 +1,80 @@
-#' Perform Walk Foward Model Fit
+#' Perform walk-forward model fitting with contribution caps
 #' 
-#' Fit a linear elastic net model with optimized contribution cap.
-#' Apply walk forward on the evaluation set.
+#' Fits a linear elastic net model with an additional contribution-cap penalty
+#' by repeatedly refitting over expanding data and generating out-of-sample
+#' predictions in a walk-forward manner. At each step, the model is trained on
+#' all rows up to the current cut point and evaluated on the next \code{walk}
+#' rows.
 #' 
-#' @param X input matrix
-#' @param y response variable
-#' @param lambda the strength of the elasticnet regularizer
-#' @param alpha the elasticnet mixing parameter. `alpha=1` collapses to the 
-#' LASSO penalty and `alpha=0` the ridge penalty
-#' @param mu the strength of the contribution cap regularizer
-#' @param L contribution ceiling. If set to a single value the same ceiling is
-#' applied to all parameters
-#' @param newx data used to evaluate and apply the contribution caps. If unspecified
-#' default to the input matrix. 
-#' @param walk number of rows to evaluate and fit models at each time. Default to
-#' `walk = 1`
-#' @param par A numeric vector containing the initial values for all variables. 
-#' If unspecified default to zero initialization.
-#' @param multiplier A numeric value or vector used for scaling feature contribution
-#' @param intercept flag for whether the intercept should be fitted. Default to
-#' `intercept=TRUE`
-#' @param standardize flag for standardization of the `x` and `y` variables.
-#' The coefficients are always returned on the original scale. Default is 
-#' `standardize=TRUE`
-#' @param lower.limits A numeric value or vector containing lower bounds for fitted
-#' parameters. The initialized values must be above the `lower.limits`.
-#' @param upper.limits A numeric value or vector containing upper bounds for fitted
-#' parameters. The initialized values must be below the `upper.limits`.
-#' @param tol The tolerance parameter for gradient masking when `lower.limits` or
-#' `upper.limits` are specified.
-#' @param maxit Maximum number of passes over the data. Default is 10^5
+#' @import xts
 #' 
-#' @return A list with the following components:
-#' \item{intercepts}{Best intercept values.}
-#' \item{betas}{The best sets of parameters found.}
-#' \item{feature_contributions}{A numerical matrix recording the contributions of
-#' each covariate.}
-#' \item{predictions}{A numerical matrix recording the model predictions.}
-#' \item{mus}{The contribution cap penalty strengths specified in the model.}
+#' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
+#'  features and rows are observations.
+#' @param y Numeric response vector of length \eqn{n}.
+#' @param lambda Nonnegative numeric scalar; overall strength of the elastic net penalty. 
+#' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
+#'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
+#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty
+#' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
+#'  contribution ceiling(s). If scalar, the same ceiling is applied to all
+#'  coefficients
+#' @param newx Optional numeric matrix with \eqn{p} columns used to evaluate and 
+#'  enforce contribution caps. If \code{NULL}, defaults to \code{X}.
+#' @param walk Integer; number of consecutive rows predicted at each step before
+#'  advancing the window. Default \code{1}.
+#' @param par Optional numeric vector of length \eqn{p} with initial coefficient
+#'  values. If \code{NULL}, uses zero initialization. 
+#' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
+#'  scale feature contributions during the capping step. Defaults to 1.
+#' @param intercept Logical; should an intercept be fitted? Default \code {TRUE}.
+#' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
+#'  are standardized for fitting; coefficients are returned on the original scale.
+#'  Default \code{TRUE}.
+#' @param lower.limits lower.limits Optional numeric scalar or length-\eqn{p} vector of lower
+#'  bounds on coefficients. Initial values must satisfy the bounds.
+#' @param upper.limits Optional numeric scalar or length-\eqn{p} vector of upper
+#'  bounds on coefficients. Initial values must satisfy the bounds. 
+#' @param tol Nonnegative numeric tolerance used for gradient masking when 
+#'  \code{lower.limits} or \code{upper.limits} are specified. Default \code{1e-8}.
+#' @param maxit Integer; maximum number of quasi-Newton iterations. Default 
+#'  \code{1e5}.
+#' 
+#' @return An object of class \code{"capnet_walk"} with components:
+#' \itemize{
+#'  \item \code{intercepts} Numeric vector of length \eqn{S} with fitted 
+#'    intercepts for each step.
+#'  \item \code{betas} Numeric matrix of shape \eqn{p\times S} with fitted
+#'    coefficients per step
+#'  \item \code{feature_contributions} Numeric matrix of shape 
+#'    \eqn{S\times p} giving per-row, per-feature contributions 
+#'    stacked across all evaluation rows in order of prediction.
+#'  \item \code{predictions} Numeric matrix of out-of-sample predictions for 
+#'    the evaluation rows; shape \eqn{S\times p}.
+#'  \item \code{mus} Numeric vector of length \eqn{n_\mathrm{new}} for the 
+#'    \code{mu} used at each step.
+#' }
+#' 
+#' @details
+#' Given the evaluation matrix \code{newx} of size \eqn{S\times p}. At step 
+#' \eqn{s=1,\dots,S}, the model is trained on \code{X} and \code{y} and the 
+#' contribution caps are evaluated on rows 
+#' \eqn{(s-1)\times\text{walk}:s\times\text{walk}}. Each fit calls 
+#' \code{capnet()} internally with the provided hyperparameters and constraints.
+#' 
+#' @seealso [capnet()], [predict.capnet()], [coef.capnet()]
+#' 
+#' @examples
+#' set.seed(1)
+#' n <- 60; p <- 6; n_new <- 10
+#' X <- matrix(rnorm(n * p), n, p)
+#' newx <- matrix(rnorm(n_new * p), n_new, p)
+#' beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
+#' y <- as.numeric(X %*% beta + rnorm(n))
+#' out <- capnet.walk(X, y, lambda = 0.1, alpha = 0.5, mu = 1, L = 0.5, newx = newx, walk = 1)
 #' 
 #' @export
 
-capnet.walk <- function(X, y, lambda, alpha, mu, L, newx,
+walk_capnet <- function(X, y, lambda, alpha, mu, L, newx,
                         walk = 1, par = NULL, multiplier = 1,
                         standardize = TRUE,
                         lower.limits = NULL, upper.limits = NULL,

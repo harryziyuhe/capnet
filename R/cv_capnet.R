@@ -1,41 +1,82 @@
-#' Perform Cross-Validation for capnet
+#' Perform cross-validation for \code{capnet}
 #'
-#' Does grid-search hyperparameter search with cross-validation for capnet. Return
-#' the parameter grid and the best parameters pair. Tunes alpha and lambda values.
+#' Runs a grid search over \code{alpha} and \code{lambda} with K-fold
+#' cross-validation for the \code{capnet()} model. Returns the searched grid,
+#' fold-wise errors, mean errors, and the best hyperparameters.
 #' 
-#' @param X input matrix
-#' @param y response variable
-#' @param mu the strength of the contribution cap regularizer
-#' @param L contribution ceiling. If set to a single value the same ceiling is
-#' applied to all parameters
-#' @param lambda the strength of the elasticnet regularizer
-#' @param alpha the elasticnet mixing parameter. `alpha=1` collapses to the 
-#' LASSO penalty and `alpha=0` the ridge penalty
-#' @param newx data used to evaluate and apply the contribution caps. If unspecified
-#' default to the input matrix. 
-#' @param multiplier A numeric value or vector used for scaling feature contribution
-#' @param standardize flag for standardization of the `x` and `y` variables.
-#' The coefficients are always returned on the original scale. Default is 
-#' `standardize=TRUE`
-#' @param splits the user-specified splits index for cross-validation. If
-#' unspecified default to k-fold cross-validation
-#' @param K the number of folds to split the data into for k-fold cross-validation
-#' when no splits index is specified.
-#' @param metric the metric used to evaluate cross-validation results. Can be 
-#' "mse" or "rsq". Default is `metric="mse"`
-#' @param verbose Defaults to 0. Set to 1 to show console outputs cross-validation.
+#' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
+#'  features and rows are observations.
+#' @param y Numeric response vector of length \eqn{n}.
+#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty
+#' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
+#'  contribution ceiling(s). If scalar, the same ceiling is applied to all
+#'  coefficients
+#' @param lambda Numeric vector (default \code{exp(seq(1, -5, length.out = 50))})
+#'  of nonnegative elastic-net penalty strengths to search.
+#' @param alpha Numeric vector (default \code{seq(0, 1, length.out = 5)}) with
+#'  values in \eqn{[0,1]} to search (elastic-net mixing parameters;
+#'  \code{alpha = 1} is Lasso, \code{alpha = 0} is Ridge).
+#' @param newx Optional numeric matrix with \eqn{p} columns used to evaluate and 
+#'  apply contribution caps. If \code{NULL}, defaults to \code{X}.
+#' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
+#'  scale feature contributions during the capping step; defaults to 1.
+#' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
+#'  are standardized for fitting; coefficients are returned on the original scale.
+#'  Default \code{TRUE}.
+#' @param splits Optional integer vector of length \eqn{n} with values in
+#'  \code{1:K} giving the fold assignment for each row. If \code{NULL},
+#'  K-fold CV is created internally using \code{K}.
+#' @param K Integer \eqn{\ge 2}; number of folds used when \code{splits} is
+#'  \code{NULL}. Default \code{5}. If \code{splits} is provided, \code{K} is
+#'  set to \code{length(unique(splits))}.
+#' @param metric Character string; CV scoring metric: \code{"mse"} (lower is 
+#'  better) or \code{"rsq"} (higher is better). Default \code{"mse"}.
+#' @param verbose Integer; \code{0} for silent, \code{1} to print progress.
+#' @param ... Additional arguments forwarded to \code{capnet()}, e.g.,
+#'  \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit}.
 #' 
-#' @return A list of the following components:
-#' \item {alpha}{Alpha values searched}
-#' \item {lambda}{Lambda values searched}
-#' \item {cv_errors}{Matrix of cross-validation error for each parameter pair and each fold}
-#' \item {mean_errors}{Matrix of average cross-validation error for ech parameter pair}
-#' \item {best_alpha}{The best alpha value}
-#' \item {best_lambda}{The best lambda value}
-#' \item {best_error}{Validation error for the best parameter pair
+#' @return An object of class \code{"cv_capnet"} with components:
+#' \itemize{
+#'  \item \code{alpha} Numeric vector of alpha values searched.
+#'  \item \code{lambda} Numeric vector of lambda values searched.
+#'  \item \code{cv_errors} Numeric array of shape
+#'    \eqn{A\times L\times K} with fold-wise errors for each
+#'    \code{alpha} (\eqn{A}) and \code{lambda}(\eqn{L}) pair across folds.
+#'  \item \code{mean_errors} Numeric matrix of shape \eqn{A\times L} with
+#'    mean CV error across folds for each parameter pair.
+#'  \item \code{best_alpha} Numeric; the selected alpha.
+#'  \item \code{best_lambda} Numeric; the selected lambda.
+#'  \item \code{best_error} Numeric; CV score at the selected pair (mean over
+#'    folds, consistent with \code{metric}).
+#' }
+#' 
+#' @details
+#' If \code{split} is \code{NULL}, folds are generated as
+#' \code{sample(rep(1:K, length.out = n))}. Set a seed beforehand to reproduce
+#' the random fold allocation. If \code{splits} is supplied as an integer vector
+#' of fold IDs, \code{K} is inferred as \code{length(unique(splits))}.
+#' 
+#' For each (\code{alpha}, \code{\lambda}) pair, \code{capnet()} is fit on the 
+#' training portion of each fold and evaluated on the held-out rows using 
+#' \code{metric}.
+#' 
+#' Note: The default random fold creation assumes i.i.d. rows. For time-ordered
+#' data, supply \code{splits} explicitly to ensure leakage-free evaluation.
+#' 
+#' @seealso [capnet()], [plot.cv_capnet]
+#' 
+#' @examples
+#' set.seed(1)
+#' n <- 80; p <- 10
+#' X <- matrix(rnorm(n * p), n, p)
+#' beta <- c(1.2, 0.7, 0.5, rep(0, p - 3))
+#' y <- as.numeric(X %*% beta + rnorm(n))
+#' cv <- cv_capnet(X, y, mu = 1, L = 1.5)
+#' cv$best_alpha; cv$best_lambda; cv$best_error
+#' 
 #' @export
 
-cv.capnet <- function(X, y,
+cv_capnet <- function(X, y,
                       mu, L,
                       lambda = exp(seq(1, -5, length.out = 50)),
                       alpha = seq(0, 1, length.out = 5),

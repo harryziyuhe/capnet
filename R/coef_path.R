@@ -1,18 +1,50 @@
-#' Calculate coefficients along a parameter path
+#' Calculate coefficients along a penalty path
 #' 
-#' Calculate the coefficient values from the capnet model along the path
-#' of one hyperparameter values.
+#' Computes fitted coefficients from \code{capnet()} along a path of 
+#' \code{lambda} values (with \code{alpha} held fixed). This is useful for
+#' inspecting coefficient shrinkage and entry/exit as regularization increases.
 #' 
-#' @param X input matrix
-#' @param y response variable
-#' @param lambda the strength of the elasticnet regularizer
-#' @param alpha the elasticnet mixing parameter
-#' @param mu the strength of the contribution cap regularizer
-#' @param standardize flag for standardization of the `x` and `y` variables.
-#' The coefficients are always returned on the original scale. Default is 
-#' `standardize=TRUE`
+#' @param X Numeric predictor matrix of shape \eqn{n\times p}.
+#' @param y Numeric response vector of length \eqn{n}.
+#' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
+#'  contribution ceiling(s). If scalar, the same ceiling is applied to all
+#'  coefficients.
+#' @param lambda Numeric vector (default \code{exp(seq(1, -5, length.out = 50))})
+#'  of nonnegative elastic-net penalties to trace.
+#' @param alpha Numeric scalar in \eqn{[0,1]} (default \code{0.5}); the 
+#'  elastic-net mixing parameter. \code{alpha = 1} is Lasso, \code{alpha=0} is 
+#'  Ridge. 
+#' @param mu Nonnegative numeric scalar; strength of the contribution-cap 
+#' penalty (default \code{1}).
+#' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
+#'  are standardized for fitting; coefficients are returned on the original scale.
+#'  Default \code{TRUE}.
+#' @param ... Additional arguments forwarded to \code{capnet()}, e.g.,
+#'  \code{newx}, \code{par}, \code{multiplier}, \code{intercept},
+#'  \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit},
+#'  \code{check.finite}, \code{verbose}.
 #' 
-#' @return A data.frame of the coefficients for the hyperparameter sets
+#' @return A \code{data.frame} in long/tidy format with one row per
+#'  (\code{lambda}, coefficient) pair.
+#'  
+#' @details
+#' For each \code{lambda} in the supplied vector, \code{capnet()} is fit with
+#' fixed \code{alpha}, \code{mu}, and \code{L}, and the resulting coefficients
+#' are collected. If feature names are available from \code{colnames(X)}, they
+#' are used as column names.
+#' 
+#' @seealso [capnet()], [plot.capnet_path()]
+#'  
+#' @examples
+#' set.seed(1)
+#' n <- 50; p <- 8
+#' X <- matrix(rnorm(n * p), n, p)
+#' colnames(X) <- paste0("x", 1:p)
+#' beta <- c(1.5, 0.8, 0.2, rep(0, p - 3))
+#' y <- as.numeric(X %*% beta + rnorm(n))
+#' path <- coef_path(X, y, L = 0.5, alpha = 0.5,
+#'                   lambda = exp(seq(1, -5, length.out = 50)), mu = 1)
+#'
 
 coef_path <- function(X, y, L,
                       lambda = exp(seq(1, -5, length.out = 50)), 
@@ -21,7 +53,7 @@ coef_path <- function(X, y, L,
                       standardize = TRUE,
                       ...) {
   # Stop if there is any NA value in data
-  if (anyNA(x) || anyNA(y)) {
+  if (anyNA(X) || anyNA(y)) {
     stop("X or y contains NA values")
   }
   

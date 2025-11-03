@@ -1,0 +1,8 @@
+^README\.Rmd$
+^\.github$
+^dev$
+^data-raw$
+^\.Rproj\.user$
+^\.Rhistory$
+^\.Rproj$
+^\.DS_Store$
