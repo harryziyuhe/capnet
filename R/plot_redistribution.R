@@ -4,7 +4,10 @@
 #' uncapped and a capped \code{capnet} fit. Produces either side-by-side
 #' ("raw") bar charts of levels or ("delta") bar charts of changes.
 #'
-#' @importFrom ggplot2 ggplot aes geom_col geom_bar coord_flip labs theme_minimal
+#' @importFrom ggplot2 ggplot aes geom_col geom_bar coord_flip labs
+#' @importFrom ggplot2 theme_minimal position_dodge
+#' @importFrom stats reorder
+#' @importFrom utils head
 #'
 #' @param uncapped An object returned by \code{capnet()} fit without a 
 #'  contribution cap(i.e., \code{mu = 0} or large \code{L}).
@@ -90,7 +93,8 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
   df_top <- head(df, top_n)
   
   if (plot == "delta") {
-    p1 <- ggplot(df_top, aes(x = reorder(variable, delta_beta), y = delta_beta)) +
+    p1 <- ggplot(df_top, aes(x = reorder(.data$variable, .data$delta_beta), 
+                             y = .data$delta_beta)) +
       geom_bar(stat = "identity", fill = "steelblue") +
       coord_flip() +
       theme_minimal() + 
@@ -99,7 +103,8 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
         x = NULL, y = NULL
       )
     
-    p2 <- ggplot(df_top, aes(x = reorder(variable, delta_contribution), y = delta_contribution)) +
+    p2 <- ggplot(df_top, aes(x = reorder(.data$variable, .data$delta_contribution), 
+                             y = .data$delta_contribution)) +
       geom_bar(stat = "identity", fill = "steelblue") +
       coord_flip() +
       theme_minimal() + 
@@ -113,7 +118,9 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
       model = rep(c("Uncapped", "Capped"), each = nrow(df_top)),
       beta = c(df_top$beta_uncapped, df_top$beta_capped)
     )
-    p1 <- ggplot(df_beta, aes(x = variable, y = beta, fill = model)) +
+    p1 <- ggplot(df_beta, aes(x = .data$variable, 
+                              y = .data$beta, 
+                              fill = .data$model)) +
       geom_col(position = position_dodge(width = 0.6), width = 0.6) +
       labs(title = "Beta Comparison", y = "Beta", x = NULL, fill = "Model") +
       theme_minimal()
@@ -123,7 +130,9 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
       model = rep(c("Uncapped", "Capped"), each = nrow(df_top)),
       contribution = c(df_top$contribution_uncapped, df_top$contribution_capped)
     )
-    p2 <- ggplot(df_contrib, aes(x = variable, y = contribution, fill = model)) +
+    p2 <- ggplot(df_contrib, aes(x = .data$variable, 
+                                 y = .data$contribution, 
+                                 fill = .data$model)) +
       geom_col(position = position_dodge(width = 0.6), width = 0.6) +
       labs(title = "Contribution Comparison", y = "Contribution", x = NULL, fill = "Model") +
       theme_minimal()

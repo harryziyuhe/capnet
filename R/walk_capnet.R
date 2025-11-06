@@ -7,6 +7,7 @@
 #' rows.
 #' 
 #' @import xts
+#' @importFrom zoo index
 #' 
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
 #'  features and rows are observations.
@@ -26,7 +27,6 @@
 #'  values. If \code{NULL}, uses zero initialization. 
 #' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
 #'  scale feature contributions during the capping step. Defaults to 1.
-#' @param intercept Logical; should an intercept be fitted? Default \code {TRUE}.
 #' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
 #'  are standardized for fitting; coefficients are returned on the original scale.
 #'  Default \code{TRUE}.
@@ -39,20 +39,18 @@
 #' @param maxit Integer; maximum number of quasi-Newton iterations. Default 
 #'  \code{1e5}.
 #' 
-#' @return An object of class \code{"capnet_walk"} with components:
-#' \itemize{
-#'  \item \code{intercepts} Numeric vector of length \eqn{S} with fitted 
-#'    intercepts for each step.
-#'  \item \code{betas} Numeric matrix of shape \eqn{p\times S} with fitted
-#'    coefficients per step
-#'  \item \code{feature_contributions} Numeric matrix of shape 
+#' @return An object of class \code{"walk_capnet"} with components:
+#'  \item{\code{intercepts}}{Numeric vector of length \eqn{S} with fitted 
+#'    intercepts for each step.}
+#'  \item{\code{betas}}{Numeric matrix of shape \eqn{p\times S} with fitted
+#'    coefficients per step.}
+#'  \item{\code{feature_contributions}}{Numeric matrix of shape 
 #'    \eqn{S\times p} giving per-row, per-feature contributions 
-#'    stacked across all evaluation rows in order of prediction.
-#'  \item \code{predictions} Numeric matrix of out-of-sample predictions for 
-#'    the evaluation rows; shape \eqn{S\times p}.
-#'  \item \code{mus} Numeric vector of length \eqn{n_\mathrm{new}} for the 
-#'    \code{mu} used at each step.
-#' }
+#'    stacked across all evaluation rows in order of prediction.}
+#'  \item{\code{predictions}}{Numeric matrix of out-of-sample predictions for 
+#'    the evaluation rows; shape \eqn{S\times p}.}
+#'  \item{\code{mus}}{Numeric vector of length \eqn{n_\mathrm{new}} for the 
+#'    \code{mu} used at each step.}
 #' 
 #' @details
 #' Given the evaluation matrix \code{newx} of size \eqn{S\times p}. At step 
@@ -70,7 +68,7 @@
 #' newx <- matrix(rnorm(n_new * p), n_new, p)
 #' beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
 #' y <- as.numeric(X %*% beta + rnorm(n))
-#' out <- capnet.walk(X, y, lambda = 0.1, alpha = 0.5, mu = 1, L = 0.5, newx = newx, walk = 1)
+#' out <- walk_capnet(X, y, lambda = 0.1, alpha = 0.5, mu = 1, L = 0.5, newx = newx, walk = 1)
 #' 
 #' @export
 
@@ -167,5 +165,5 @@ walk_capnet <- function(X, y, lambda, alpha, mu, L, newx,
     predictions = predictions,
     mus = mu_values,
     call = match.call()
-  ), class = c("capnet_walk"))
+  ), class = c("walk_capnet"))
 }

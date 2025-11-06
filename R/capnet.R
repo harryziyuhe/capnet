@@ -25,7 +25,7 @@
 #'  values. If \code{NULL}, uses zero initialization. 
 #' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
 #'  scale feature contributions during the capping step. Defaults to 1.
-#' @param intercept Logical; should an intercept be fitted? Default \code {TRUE}.
+#' @param intercept Logical; should an intercept be fitted? Default \code{TRUE}.
 #' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
 #'  are standardized for fitting; coefficients are returned on the original scale.
 #'  Default \code{TRUE}.
@@ -43,25 +43,26 @@
 #'  progress. Default \code{0}.
 #' 
 #' @return An object of class \code{"capnet"} with components:
-#' \itemize{
-#'  \item \code{a0} Best intercept (numeric scalar).
-#'  \item \code{beta} Numeric vector (length \eqn{p}); fitted coefficients.
-#'  \item \code{value} Numeric; minimized objective value.
-#'  \item \code{feature_contributions} Numeric matrix of shape
+#'  \item{\code{a0}}{Best intercept (numeric scalar).}
+#'  \item{\code{beta}}{Numeric vector (length \eqn{p}); fitted coefficients.}
+#'  \item{\code{value}}{Numeric; minimized objective value.}
+#'  \item{\code{feature_contributions}}{Numeric matrix of shape
 #'    \eqn{n_{\mathrm{new}}\times p} giving per-feature contributions evaluated
-#'    on \code{newx} (rows) for each feature (columns).
-#'  \item \code{newx} The evaluation matrix.
-#'  \item \code{convergence} Integer code; \code{0} indicates successful
-#'    convergence, negative values indicate OWL-QN/L-BFGS execution errors.
-#'  \item \code{message} Character string describing any optimizer message 
-#'    (present if \code{convergence != 0})
-#'  \item \code{alpha}, \code{lambda}, \code{mu}, \code{L}, \code{multiplier}
-#'    Echoed tuning parameters.
-#'  \item \code{call} The matched call.
-#' }
+#'    on \code{newx} (rows) for each feature (columns).}
+#'  \item{\code{newx}}{The evaluation matrix.}
+#'  \item{\code{convergence}}{Integer code; \code{0} indicates successful
+#'    convergence, negative values indicate OWL-QN/L-BFGS execution errors.}
+#'  \item{\code{message}}{Character string describing any optimizer message 
+#'    (present if \code{convergence != 0})}
+#'  \item{\code{alpha}}{alpha value passed in input.}
+#'  \item{\code{lambda}}{lambda value passed in input.}
+#'  \item{\code{mu}}{mu value passed in input.}
+#'  \item{\code{L}}{L value passed in input.}
+#'  \item{\code{multiplier}}{multiplier value passed in input.}
+#'  \item{\code{call}}{The matched call.}
 #' 
 #' @details
-#' When \code{alpha > 0} and \code{\lambda > 0}, OWL-QN is used to handle the L1
+#' When \code{alpha > 0} and \code{lambda > 0}, OWL-QN is used to handle the L1
 #' component; otherwise L-BFGS is used. Box constraints are enforced via masked
 #' gradients with tolerance \code{tol}. If \code{standardize = TRUE}, the model
 #' is fit on standardized variables and coefficients are mapped back to the

@@ -44,7 +44,7 @@
 #' y <- as.numeric(X %*% beta + rnorm(n))
 #' path <- coef_path(X, y, L = 0.5, alpha = 0.5,
 #'                   lambda = exp(seq(1, -5, length.out = 50)), mu = 1)
-#'
+#' @export
 
 coef_path <- function(X, y, L,
                       lambda = exp(seq(1, -5, length.out = 50)), 
@@ -58,6 +58,7 @@ coef_path <- function(X, y, L,
   }
   
   betas <- NULL
+  p <- ncol(X)
   
   if (standardize) {
     X_scaled <- scale(X)
@@ -85,7 +86,7 @@ coef_path <- function(X, y, L,
       stop("mu must be a constant value when evaluating along lambda path")
     }
     param = log(lambda)
-    path = "λ (log)"
+    path = "lambda (log)"
     alpha = rep(alpha, length(lambda))
     mu = rep(mu, length(lambda))
   } else if (length(mu) > 1) {
@@ -93,12 +94,12 @@ coef_path <- function(X, y, L,
       stop("alpha must be a constant value when evaluating along mu path")
     }
     param = log(mu)
-    path = "μ (log)"
+    path = "mu (log)"
     lambda = rep(lambda, length(mu))
     alpha = rep(alpha, length(mu))
   } else if (length(alpha) > 1) {
     param = alpha
-    path = "α"
+    path = "alpha"
     lambda = rep(lambda, length(alpha))
     mu = rep(mu, length(alpha))
   } else {

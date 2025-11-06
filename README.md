@@ -74,16 +74,16 @@ Where:
 | Function                | Description
 |-------------------------|------------------------------
 | `capnet()`              | Fit a linear model with contribution caps
-| `cv.capnet()`           | Cross-validation to select lambda/alpha/mu value
-| `capnet.walk()`         | Walk forward to fit contribution caps over multi-row evaluation matrix
+| `cv_capnet()`           | Cross-validation to select lambda/alpha/mu value
+| `walk_capnet()`         | Walk forward to fit contribution caps over multi-row evaluation matrix
 | `coef_path()`           | Fit models along one hyperparameter path and return the coefficients
 | `plot_redistribution()` | Plot redistribution of feature coefficients or contributions
-| `capnet.violations()`   | Check contribution violations
+| `capnet_violations()`   | Check contribution violations
 
 ## Dependencies
 
 - R >= 4.1.0
-- lbfgs, ggplot2
+- lbfgs, ggplot2, xts
 
 ## License
 

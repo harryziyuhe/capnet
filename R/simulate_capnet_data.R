@@ -5,18 +5,23 @@
 #' coefficients \code{beta_true}, suggested caps \code{L}, and a matrix \code{Z}
 #' of latent drivers. In \code{mode = "basic"}, there are no latent drivers, so
 #' \code{Z} is set to \code{X}.
+#' 
+#' @importFrom stats rnorm runif rbinom
 #'
 #' @param n Integer; number of observations. Default \code{100}.
 #' @param p Integer; number of predictors. Default \code{20}.
 #' @param mode Character; one of \code{"basic"} or \code{"proxy"}. Default \code{"basic"}.
-#' @param nonzero_frac Numeric in \eqn{[0,1]}; fraction of nonzero coefficients
-#'   in \code{beta_true}. Default \code{0.7}. (Alias: \code{sparsity}.)
+#' @param sparsity Numeric in \eqn{[0,1]}; fraction of nonzero coefficients
+#'   in \code{beta_true}. Default \code{0.7}
 #' @param beta_range Numeric length-2; uniform range for nonzero \code{beta_true}
 #'   entries. Default \code{c(-2, 2)}.
 #' @param sigma Positive numeric; noise sd for \code{y}. Default \code{1}.
 #' @param seed Optional integer for reproducibility. Default \code{NULL}.
 #'
 #' @section Proxy/unstable-feature controls (used when \code{mode = "proxy"}):
+#' These arguments control the generation of unstable proxy features when
+#' simulating data under \code{mode = "proxy"}.
+#' 
 #' @param z_sd Positive numeric; sd of latent drivers \code{Z}. Default \code{1}.
 #' @param a_sd Nonnegative numeric; sd of log-scales \code{a_j = exp(N(0, a_sd^2))}.
 #'   Default \code{0.3}.
@@ -32,13 +37,15 @@
 #'   feature uses \code{sigma_high}. Default \code{0.10}.
 #'
 #' @return A list with the same core components for both modes:
-#' \itemize{
-#'   \item \code{X} \eqn{(n \times p)} observed design matrix (colnames auto-filled as \code{"X1"},… if missing).
-#'   \item \code{y} Numeric response vector of length \eqn{n}.
-#'   \item \code{beta_true} Numeric length-\eqn{p} vector of ground-truth coefficients.
-#'   \item \code{L} Length-\eqn{p} vector of suggested contribution caps (nonnegative).
-#'   \item \code{Z} \eqn{(n \times p)} latent drivers. In \code{mode = "basic"}, \code{Z = X}.
-#' }
+#'   \item{\code{X}}{\eqn{(n \times p)} observed design matrix (colnames 
+#'    auto-filled as \code{"X1"},… if missing).}
+#'   \item{\code{y}}{Numeric response vector of length \eqn{n}.}
+#'   \item{\code{beta_true}}{Numeric length-\eqn{p} vector of ground-truth 
+#'    coefficients.}
+#'   \item{\code{L}}{Length-\eqn{p} vector of suggested contribution caps 
+#'    (nonnegative).}
+#'   \item{\code{Z}}{\eqn{(n \times p)} latent drivers. In 
+#'    \code{mode = "basic"}, \code{Z = X}.}
 #' For \code{mode = "proxy"}, additional convenience fields are included:
 #' \code{a} (feature scales), \code{unstable_idx}, \code{stable_idx}.
 #'
@@ -48,16 +55,16 @@
 #' caps are \code{L_j = pmax(|beta_true_j|, 0.1)} as a simple starting point.
 #'
 #' In \strong{proxy} mode, \code{y = Z \%*\% beta_true + N(0, sigma^2)} and
-#' \code{X = diag(a) Z + \varepsilon}. For columns in \code{unstable_idx}, each
+#' \code{X = diag(a) Z + varepsilon}. For columns in \code{unstable_idx}, each
 #' row independently flips to \code{sigma_high} with probability \code{high_prob}.
 #'
 #' @examples
 #' set.seed(42)
-#' d_basic <- simulate_capnet_data(n = 100, p = 10, nonzero_frac = 0.5)
+#' d_basic <- simulate_capnet_data(n = 100, p = 10, sparsity = 0.5)
 #' names(d_basic)
 #'
 #' d_proxy <- simulate_capnet_data(mode = "proxy", n = 300, p = 8,
-#'                                 nonzero_frac = 0.6, unstable_frac = 0.25,
+#'                                 sparsity = 0.6, unstable_frac = 0.25,
 #'                                 sigma_low = 1, sigma_high = 6, high_prob = 0.2)
 #' names(d_proxy)
 #'
@@ -101,8 +108,8 @@ simulate_capnet_data <- function(
   Z <- matrix(rnorm(n * p, sd = z_sd), n, p)
   beta_true <- rnorm(p)
   k0 <- floor((1 - sparsity) * p)
-  if (k0 > 0) beta[sample(seq_len(p), k0)] <- 0
-  y <- drop(Z %*% beta + rnorm(n, sd = sigma))
+  if (k0 > 0) beta_true[sample(seq_len(p), k0)] <- 0
+  y <- drop(Z %*% beta_true + rnorm(n, sd = sigma))
   
   a <- exp(rnorm(p, mean = 0, sd = a_sd))
   mean_part <- sweep(Z, 2, a, "*")

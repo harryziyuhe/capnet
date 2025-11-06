@@ -1,8 +1,13 @@
 ---
 title: "Contribution Constrained Regularization"
-output: pdf_document
-bibliography: references.bib 
+author: "Harry He"
 date: "2025-06-26"
+output: rmarkdown::html_vignette
+bibliography: references.bib
+vignette: >
+  %\VignetteIndexEntry{Contribution Constrained Regularization}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
@@ -71,7 +76,7 @@ cat(sprintf("Best alpha value: %.3f | Best lambda value %.4f", alpha1, lambda1))
 ```
 
 ```{r penalty}
-capnet.cv2 <- cv.capnet(X, y, 1, L, standardize = FALSE)
+capnet.cv2 <- cv_capnet(X, y, 1, L, standardize = FALSE)
 alpha2 <- capnet.cv2$best_alpha
 lambda2 <- capnet.cv2$best_lambda
 capnet.mod2 <- capnet(X, y, alpha = alpha2, lambda = lambda2,
@@ -82,7 +87,7 @@ capnet.mod2 <- capnet(X, y, alpha = alpha2, lambda = lambda2,
 cat(sprintf("Best alpha value: %.3f | Best lambda value %.4f", alpha2, lambda2))
 ```
 
-```{r weights}
+```{r weights, fig.width=9, fig.height=5, out.width='100%'}
 plots <- plot_redistribution(capnet.mod1, capnet.mod2, plot = "raw")
 plots$beta
 plots$contribution

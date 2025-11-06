@@ -15,7 +15,6 @@
 #' 
 #' @return
 #' A list with the following components:
-#' \describe{
 #'  \item{\code{columns}}{Integer vector of column indices (features) with any
 #'    violations of the contribution cap.}
 #'  \item{\code{rows}}{Integer vector of row indices (observations) where at
@@ -24,7 +23,6 @@
 #'    (or \code{object$feature_contributions}) containing the amount by which
 #'    each absolute contribution exceeded its cap. Zero entries indicate no 
 #'    violation.}
-#' }
 #' 
 #' If no violations are detected (the sum of \code{excess} is zero), the function
 #' prints a message and returns \code{NULL} invisibly.
@@ -60,7 +58,7 @@ capnet_violations <- function(object, newx = NULL, multiplier = NULL) {
     contribution <- object$feature_contributions
   }
   
-  excess_contribution <- pmax(sweep(abs(contribution), 2, L, "-"), 0)
+  excess_contribution <- pmax(sweep(abs(contribution), 2, object$L, "-"), 0)
   if (sum(excess_contribution) == 0){
     message("No cap violations detected.")
     return(invisible(NULL))

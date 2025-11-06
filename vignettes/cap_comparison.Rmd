@@ -1,7 +1,12 @@
 ---
 title: "Capping Variable Contributions"
-output: pdf_document
+author: "Harry He"
 date: "2025-06-17"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Capping Variable Contributions}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ### Purpose of Vignette

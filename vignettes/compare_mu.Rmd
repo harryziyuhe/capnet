@@ -1,7 +1,13 @@
 ---
 title: "Penalty Strength Studies"
-output: pdf_document
-date: "2025-07-02"
+author: "Harry He"
+date: "2025-06-26"
+output: rmarkdown::html_vignette
+bibliography: references.bib
+vignette: >
+  %\VignetteIndexEntry{Penalty Strength Studies}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 header-includes:
   - \usepackage{makecell}
 ---
@@ -92,25 +98,34 @@ for (i in seq(-5, 10)) {
 }
 ```
 
-```{r table, results = "asis", echo = FALSE, comment = FALSE, message = FALSE}
+```{r table, results='asis', echo=FALSE, message=FALSE, warning=FALSE}
 convergence.table <- as.data.frame(convergence.table)
-convergence.table <- data.frame(lapply(convergence.table, as.character), stringsAsFactors = FALSE)
-convergence.table <- cbind(10 ** seq(-5,10), convergence.table)
+convergence.table[] <- lapply(convergence.table, as.character)
+convergence.table <- cbind(10 ** seq(-5, 10), convergence.table)
 colnames(convergence.table) <- c(
   "Mu",
   "Base",
-  "\\makecell{Large \\\\ Lambda}",
-  "\\makecell{No \\\\ Elastic \\\\ Net}",
+  "Large Lambda",
+  "No Elastic Net",
   "Ridge",
   "LASSO",
-  "\\makecell{Large \\\\ Multiplier}",
+  "Large Multiplier",
   "Small L",
-  "\\makecell{Single \\\\ Max \\\\ Row}"
+  "Single Max Row"
 )
-print(xtable(convergence.table, display = c(rep("g", 10))),
-      math.style.exponents = TRUE,
-      sanitize.colnames.function = identity,
-      comment = FALSE)
+
+if (knitr::is_latex_output()) {
+  # Use xtable for LaTeX/PDF output
+  print(
+    xtable::xtable(convergence.table, display = c(rep("g", 10))),
+    math.style.exponents = TRUE,
+    sanitize.colnames.function = identity,
+    comment = FALSE
+  )
+} else {
+  # Use knitr::kable for HTML output
+  knitr::kable(convergence.table, format = "html")
+}
 ```
 
 The table show that the model encounters no convergence failure with most $\mu$ values, but when $\mu$ becomes extremely large (greater than $10^5$ or $10^6$), convergence may fail. It is also worth noting that when the L1 term is dropped in the loss function, the model has trouble converging with smaller values of $\mu$. Changing $\lambda$ and multiplier values do not significantly impact model's ability to converge. Finally, if we force the same contribution cap constraints but aggregate evaluation matrix to one row of observation, the model is more likely to encounter convergence failure with larger $\mu$ values. This is because the optimizer takes an average of all contribution cap excess when calculating the loss and gradient values, so having more observations moderates the strength of contribution cap panelty in each iteration, leading to easier and smoother convergence.
@@ -133,7 +148,7 @@ for (i in 1:50) {
 }
 ```
 
-```{r plot-lambda, echo = FALSE}
+```{r plot-lambda, echo = FALSE, fig.width=9, fig.height=5, out.width='100%'}
 best_lambdas <- as.data.frame(rbind(cbind(lambdas0, 0),
                               cbind(lambdas10, 10),
                               cbind(lambdas1000, 1000)))

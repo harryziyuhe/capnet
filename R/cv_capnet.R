@@ -36,19 +36,17 @@
 #'  \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit}.
 #' 
 #' @return An object of class \code{"cv_capnet"} with components:
-#' \itemize{
-#'  \item \code{alpha} Numeric vector of alpha values searched.
-#'  \item \code{lambda} Numeric vector of lambda values searched.
-#'  \item \code{cv_errors} Numeric array of shape
+#'  \item{\code{alpha}}{Numeric vector of alpha values searched.}
+#'  \item{\code{lambda}}{Numeric vector of lambda values searched.}
+#'  \item{\code{cv_errors}}{Numeric array of shape
 #'    \eqn{A\times L\times K} with fold-wise errors for each
-#'    \code{alpha} (\eqn{A}) and \code{lambda}(\eqn{L}) pair across folds.
-#'  \item \code{mean_errors} Numeric matrix of shape \eqn{A\times L} with
-#'    mean CV error across folds for each parameter pair.
-#'  \item \code{best_alpha} Numeric; the selected alpha.
-#'  \item \code{best_lambda} Numeric; the selected lambda.
-#'  \item \code{best_error} Numeric; CV score at the selected pair (mean over
-#'    folds, consistent with \code{metric}).
-#' }
+#'    \code{alpha} (\eqn{A}) and \code{lambda}(\eqn{L}) pair across folds.}
+#'  \item{\code{mean_errors}}{Numeric matrix of shape \eqn{A\times L} with
+#'    mean CV error across folds for each parameter pair.}
+#'  \item{\code{best_alpha}}{Numeric; the selected alpha.}
+#'  \item{\code{best_lambda}}{Numeric; the selected lambda.}
+#'  \item{\code{best_error}}{Numeric; CV score at the selected pair (mean over
+#'    folds, consistent with \code{metric}).}
 #' 
 #' @details
 #' If \code{split} is \code{NULL}, folds are generated as
@@ -56,7 +54,7 @@
 #' the random fold allocation. If \code{splits} is supplied as an integer vector
 #' of fold IDs, \code{K} is inferred as \code{length(unique(splits))}.
 #' 
-#' For each (\code{alpha}, \code{\lambda}) pair, \code{capnet()} is fit on the 
+#' For each (\code{alpha}, \code{lambda}) pair, \code{capnet()} is fit on the 
 #' training portion of each fold and evaluated on the held-out rows using 
 #' \code{metric}.
 #' 
@@ -66,13 +64,15 @@
 #' @seealso [capnet()], [plot.cv_capnet]
 #' 
 #' @examples
-#' set.seed(1)
-#' n <- 80; p <- 10
-#' X <- matrix(rnorm(n * p), n, p)
-#' beta <- c(1.2, 0.7, 0.5, rep(0, p - 3))
-#' y <- as.numeric(X %*% beta + rnorm(n))
-#' cv <- cv_capnet(X, y, mu = 1, L = 1.5)
-#' cv$best_alpha; cv$best_lambda; cv$best_error
+#' \dontrun{
+#'   set.seed(1)
+#'   n <- 80; p <- 10
+#'   X <- matrix(rnorm(n * p), n, p)
+#'   beta <- c(1.2, 0.7, 0.5, rep(0, p - 3))
+#'   y <- as.numeric(X %*% beta + rnorm(n))
+#'   cv <- cv_capnet(X, y, mu = 1, L = 1.5)
+#'   cv$best_alpha; cv$best_lambda; cv$best_error
+#' }
 #' 
 #' @export
 
