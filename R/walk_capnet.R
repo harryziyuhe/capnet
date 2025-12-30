@@ -12,32 +12,26 @@
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
 #'  features and rows are observations.
 #' @param y Numeric response vector of length \eqn{n}.
-#' @param lambda Nonnegative numeric scalar; overall strength of the elastic net penalty. 
-#' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
-#'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
-#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty
 #' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
 #'  contribution ceiling(s). If scalar, the same ceiling is applied to all
 #'  coefficients
 #' @param newx Optional numeric matrix with \eqn{p} columns used to evaluate and 
 #'  enforce contribution caps. If \code{NULL}, defaults to \code{X}.
-#' @param walk Integer; number of consecutive rows predicted at each step before
-#'  advancing the window. Default \code{1}.
-#' @param par Optional numeric vector of length \eqn{p} with initial coefficient
-#'  values. If \code{NULL}, uses zero initialization. 
-#' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
-#'  scale feature contributions during the capping step. Defaults to 1.
+#' @param family Optional character scalar (e.g. "binomial"), function (e.g. 
+#' \code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).
+#' @param intercept Logical; should an intercept be fitted? Default \code{TRUE}.
 #' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
 #'  are standardized for fitting; coefficients are returned on the original scale.
 #'  Default \code{TRUE}.
-#' @param lower.limits lower.limits Optional numeric scalar or length-\eqn{p} vector of lower
-#'  bounds on coefficients. Initial values must satisfy the bounds.
-#' @param upper.limits Optional numeric scalar or length-\eqn{p} vector of upper
-#'  bounds on coefficients. Initial values must satisfy the bounds. 
-#' @param tol Nonnegative numeric tolerance used for gradient masking when 
-#'  \code{lower.limits} or \code{upper.limits} are specified. Default \code{1e-8}.
-#' @param maxit Integer; maximum number of quasi-Newton iterations. Default 
-#'  \code{1e5}.
+#' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
+#'  scale feature contributions during the capping step. Defaults to 1.
+#' @param walk Integer; number of consecutive rows predicted at each step before
+#'  advancing the window. Default \code{1}.
+#' @param lambda Nonnegative numeric scalar; overall strength of the elastic net penalty. 
+#' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
+#'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
+#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty
+#' @param ... Additional arguments used in fitting. See [capnet()] for more details.
 #' 
 #' @return An object of class \code{"walk_capnet"} with components:
 #'  \item{\code{intercepts}}{Numeric vector of length \eqn{S} with fitted 
@@ -72,78 +66,101 @@
 #' 
 #' @export
 
-walk_capnet <- function(X, y, lambda, alpha, mu, L, newx,
-                        walk = 1, par = NULL, multiplier = 1,
+walk_capnet <- function(X, y, L, newx,
+                        family = "gaussian",
+                        intercept = TRUE, 
                         standardize = TRUE,
-                        lower.limits = NULL, upper.limits = NULL,
-                        tol = 1e-8, maxit = 10000) {
+                        multiplier = 1,
+                        walk = 1,
+                        lambda = 0,
+                        alpha = 0,
+                        mu = 0,
+                        max_mu_tries = 6,
+                        ...) {
   
   # Stop if there is any NA values in data
   if (anyNA(X) || anyNA(y) || anyNA(newx)) {
     stop("X or y or newx contains NA values")
   }
-  if (length(multiplier) == 1) multiplier <- rep(multiplier, nrow(newx))
-  if (length(multiplier) != nrow(newx)) stop("multiplier must be length 1 or match the number of observations")
   
-  n <- nrow(newx)
-  intercepts <- numeric(n)
-  betas <- NULL
-  contributions <- NULL
-  predictions <- numeric(n)
-  mu_values <- numeric(n)
+  spec <- .capnet_spec(
+    X = X, y = y, L = L,
+    family = family,
+    intercept = intercept,
+    standardize = standardize,
+    newx = newx,
+    multiplier = multiplier,
+    ...
+  )
   
-  if (standardize) {
-    X_scaled <- scale(X)
-    X_center <- attr(X_scaled, "scaled:center")
-    X_scale <- attr(X_scaled, "scaled:scale")
-    
-    y_scaled <- scale(y)
-    y_center <- attr(y_scaled, "scaled:center")
-    y_scale <- attr(y_scaled, "scaled:scale")
-  } else {
-    p <- ncol(X)
-    X_scaled <- X
-    X_center <- rep(0, p)
-    X_scale <- rep(1, p)
-    
-    y_scaled <- y
-    y_center <- 0
-    y_scale <- 1
-  }
+  train <- .capnet_standardize_train(spec)
+  m <- nrow(spec$newx)
+  p <- spec$p
   
-  fitpoints <- c(seq(1, n, walk),n+1)
-  for (i in 1:(length(fitpoints)-1)) {
+  intercepts <- numeric(m)
+  predictions <- numeric(m)
+  mu_values <- numeric(m)
+  
+  betas <- matrix(NA_real_, nrow = m, ncol = p)
+  contributions <- matrix(NA_real_, nrow = m, ncol = p)
+  
+  fitpoints <- unique(c(seq(1, m, by = walk), m + 1))
+  
+  for (i in seq_len(length(fitpoints) - 1L)) {
     start_row <- fitpoints[i]
-    end_row <- fitpoints[i+1]
-    m <- end_row - start_row
-    newx.tmp <- matrix(newx[start_row:(end_row-1), ], nrow = m)
-    multiplier.tmp <- as.numeric(multiplier)[start_row:(end_row-1)]
-    convergence.tmp <- -999
-    mu.tmp = mu
-    while (convergence.tmp < 0) {
-      capnet_results <- capnet(X_scaled, y_scaled, lambda = lambda, alpha = alpha,
-                               mu = mu.tmp, L = L, newx = newx.tmp, 
-                               standardize = FALSE,
-                               multiplier = multiplier.tmp,
-                               lower.limits = lower.limits, 
-                               upper.limits = upper.limits, tol = tol,
-                               maxit = maxit)
-      convergence.tmp <- capnet_results$convergence
-      mu.tmp <- mu.tmp / 10
+    end_row <- fitpoints[i + 1L]
+    idx_cap <- start_row:(end_row - 1L)
+    m <- length(idx_cap)
+    
+    cap <- .capnet_cap_context(spec, idx_cap = idx_cap)
+    
+    mu_try <- mu
+    fit <- NULL
+    for (k in seq_len(max_mu_tries)) {
+      params <- list(alpha = alpha, lambda = lambda, mu = mu_try)
+      
+      fit_k <- tryCatch(
+        .capnet_fit(train, cap, params),
+        error = function(e) NULL
+      )
+      
+      if (!is.null(fit_k) && (fit_k$convergence >= 0)) {
+        fit <- fit_k
+        break
+      }
+      
+      mu_try <- mu_try / 10
     }
-    intercepts[start_row:(end_row-1)] <- capnet_results$a0
-    betas <- rbind(betas, matrix(rep(capnet_results$beta, m), nrow = m))
-    contributions <- rbind(contributions, capnet_results$feature_contributions)
-    predictions[start_row:(end_row-1)] <- rowSums(capnet_results$feature_contributions) + capnet_results$a0
-    mu_values[start_row:(end_row-1)] <- capnet_results$mu
+    
+    if (is.null(fit)) {
+      warning(sprintf(
+        "walk_capnet: failed to converge for cap slice [%d, %d]; storing NA outputs.",
+        start_row, end_row - 1L
+      ))
+      intercepts[idx_cap] <- NA_real_
+      predictions[idx_cap] <- NA_real_
+      mu_values[idx_cap] <- NA_real_
+      next
+    }
+    
+    model <- .capnet_output(train, cap, fit, params)
+    
+    intercepts[idx_cap] <- model$a0
+    mu_values[idx_cap] <- mu_try
+    betas[idx_cap, ] <- matrix(rep(model$beta, m), nrow = m, byrow = TRUE)
+    contributions[idx_cap, ] <- model$feature_contributions
+    predictions[idx_cap] <- rowSums(model$feature_contributions) + model$a0
   }
   
-  if (is.xts(newx)) {
-    intercepts <- as.xts(intercepts, order.by = index(newx))
-    betas <- as.xts(betas, order.by = index(newx))
-    contributions <- as.xts(contributions, order.by = index(newx))
-    predictions <- as.xts(predictions, order.by = index(newx))
-    mu_values <- as.xts(mu_values, order.by = index(newx))
+  if (xts::is.xts(newx)) {
+    ord <- zoo::index(newx)
+    
+    intercepts <- xts::as.xts(intercepts, order.by = ord)
+    betas <- xts::as.xts(betas, order.by = ord)
+    contributions <- xts::as.xts(contributions, order.by = ord)
+    predictions <- xts::as.xts(predictions, order.by = ord)
+    mu_values <- xts::as.xts(mu_values, order.by = ord)
+    
     colnames(intercepts) <- "intercept"
     colnames(betas) <- colnames(contributions) <- colnames(X)
     colnames(predictions) <- "prediction"
@@ -152,6 +169,7 @@ walk_capnet <- function(X, y, lambda, alpha, mu, L, newx,
     intercepts <- matrix(intercepts, ncol = 1)
     predictions <- matrix(predictions, ncol = 1)
     mu_values <- matrix(mu_values, ncol = 1)
+    
     colnames(intercepts) <- "intercept"
     colnames(betas) <- colnames(contributions) <- colnames(X)
     colnames(predictions) <- "prediction"
@@ -165,5 +183,5 @@ walk_capnet <- function(X, y, lambda, alpha, mu, L, newx,
     predictions = predictions,
     mus = mu_values,
     call = match.call()
-  ), class = c("walk_capnet"))
+  ), class = "walk_capnet")
 }
