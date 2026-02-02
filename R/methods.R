@@ -46,9 +46,10 @@ coef.walk_capnet <- function(x, index = NULL, ...) {
 
 #' Predict from a fitted \code{capnet} model
 #' 
-#' @param x A fitted object of class \code{"capnet"}
-#' @param newx Optional numeric matrix for prediction. If \code{NULL}, uses
-#'  \code{x$newx}
+#' @param object A fitted object of class \code{"capnet"}
+#' @param newdata Optional numeric matrix for prediction. If \code{NULL}, uses
+#'  \code{object$newx}
+#' @param type "link" returns linear predictor eta; "response" returns mean mu.
 #' @param ... Further arguments passed to or from other methods.
 #' 
 #' @return Numeric vector of predictions (length = number of rows in 
@@ -58,13 +59,35 @@ coef.walk_capnet <- function(x, index = NULL, ...) {
 #'  
 #' @export
 #' @method predict capnet
-predict.capnet <- function(x, newx  = NULL,...) {
-  if (!is.null(newx)) {
-    newx <- x$newx
+predict.capnet <- function(object, newdata  = NULL, type = c("link", "response"), ...) {
+  type <- match.arg(type)
+  if (!is.null(newdata)) {
+    newx <- object$newx
+  } else {
+    newx <- as.matrix(newdata)
   }
-  predictions <- rowSums(sweep(newx, 2, x$beta, "*")) + x$a0
-  colnames(predictions) <- "prediction"
-  predictions
+  
+  if (is.null(object$beta) || is.null(object$a0)) {
+    stop("capnet object missing coefficients.")
+  }
+  if (ncol(newx) != length(object$beta)) {
+    stop("newdata must have ncol equal to length(coef slopes).")
+  }
+  
+  eta <- as.numeric(object$a0 + newx %*% object$beta)
+  
+  if (type == "link") return(eta)
+  
+  family <- object$family
+  if (is.character(family)) {
+    family <- normalize_family(family)
+  }
+  if (is.null(family$linkinv)) {
+    stop("Family object does not have linkinv().")
+  }
+  
+  mu <- family$linkinv(eta)
+  as.numeric(mu)
 }
 
 #' Predict from a walk-forward \code{capnet} fit
