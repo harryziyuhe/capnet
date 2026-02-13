@@ -49,11 +49,15 @@
 
 capnet_violations <- function(object, newx = NULL, multiplier = NULL) {
   if (!is.null(newx)) {
+    m <- nrow(newx)
     if (is.null(multiplier)) {
-      multiplier <- object$multiplier
+      if (length(unique(object$multiplier)) != 1) {
+        warning("Did not supply a multiplier. Original model has varying multiplier values. Defaulting to the first observed multiplier.")
+      }
+      multiplier <- rep(unique(object$multiplier)[1], m)
     }
     beta <- object$beta
-    contribution <- sweep(sweep(newx, 2, beta, "*"), 2, multiplier, "*")
+    contribution <- sweep(sweep(newx, 2, beta, "*"), 1, multiplier, "*")
   } else {
     contribution <- object$feature_contributions
   }
@@ -64,9 +68,9 @@ capnet_violations <- function(object, newx = NULL, multiplier = NULL) {
     return(invisible(NULL))
   }
   
-  list(
+  structure(list(
     columns = which(colSums(excess_contribution) > 0),
     rows = which(rowSums(excess_contribution) > 0),
     excess = excess_contribution
-  )
+  ), class = "capnet_violations")
 }
