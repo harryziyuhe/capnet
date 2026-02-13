@@ -90,7 +90,13 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
   df$delta_beta <- df$beta_capped - df$beta_uncapped
   df$delta_contribution <- df$contribution_capped - df$contribution_uncapped
   
-  df_top <- head(df, top_n)
+  if (is.finite(top_n)) {
+    df_top <- head(df, top_n)
+    var_level = unique(colnames(X))[1:top_n]
+  } else {
+    df_top <- df
+    var_level = unique(colnames(X))
+  }
   
   if (plot == "delta") {
     p1 <- ggplot(df_top, aes(x = reorder(.data$variable, .data$delta_beta), 
@@ -114,7 +120,7 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
       )
   } else {
     df_beta <- data.frame(
-      variable = rep(df_top$variable, times = 2),
+      variable = factor(rep(df_top$variable, times = 2), levels = var_level),
       model = rep(c("Uncapped", "Capped"), each = nrow(df_top)),
       beta = c(df_top$beta_uncapped, df_top$beta_capped)
     )
@@ -126,7 +132,7 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
       theme_minimal()
     
     df_contrib <- data.frame(
-      variable = rep(df_top$variable, times = 2),
+      variable = factor(rep(df_top$variable, times = 2), levels = var_level),
       model = rep(c("Uncapped", "Capped"), each = nrow(df_top)),
       contribution = c(df_top$contribution_uncapped, df_top$contribution_capped)
     )
