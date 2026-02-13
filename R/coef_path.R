@@ -16,9 +16,6 @@
 #'  Ridge. 
 #' @param mu Nonnegative numeric scalar; strength of the contribution-cap 
 #' penalty (default \code{1}).
-#' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
-#'  are standardized for fitting; coefficients are returned on the original scale.
-#'  Default \code{TRUE}.
 #' @param ... Additional arguments forwarded to \code{capnet()}, e.g.,
 #'  \code{newx}, \code{par}, \code{multiplier}, \code{intercept},
 #'  \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit},
@@ -50,7 +47,6 @@ coef_path <- function(X, y, L,
                       lambda = exp(seq(1, -5, length.out = 50)), 
                       alpha = 0.5, 
                       mu = 1,
-                      standardize = TRUE,
                       ...) {
   # Stop if there is any NA value in data
   if (anyNA(X) || anyNA(y)) {
@@ -58,25 +54,6 @@ coef_path <- function(X, y, L,
   }
   
   betas <- NULL
-  p <- ncol(X)
-  
-  if (standardize) {
-    X_scaled <- scale(X)
-    X_center <- attr(X_scaled, "scaled:center")
-    X_scale <- attr(X_scaled, "scaled:scale")
-    
-    y_scaled <- scale(y)
-    y_center <- attr(y_scaled, "scaled:center")
-    y_scale <- attr(y_scaled, "scaled:scale")
-  } else {
-    X_scaled <- X
-    X_center <- rep(0, p)
-    X_scale <- rep(1, p)
-    
-    y_scaled <- y
-    y_center <- 0
-    y_scale <- 1
-  }
   
   if (length(lambda) > 1) {
     if (length(alpha) != 1) {
@@ -110,8 +87,8 @@ coef_path <- function(X, y, L,
     l = lambda[i]
     a = alpha[i]
     m = mu[i]
-    capnet_results <- capnet(X_scaled,
-                             y_scaled,
+    capnet_results <- capnet(X,
+                             y,
                              lambda = l,
                              alpha = a,
                              mu = m,
