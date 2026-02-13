@@ -70,27 +70,31 @@
 #'
 #' @export
 simulate_capnet_data <- function(
-    n = 100, p = 20,
+    n = 100, p = 20, m = 20,
     mode = c("basic", "proxy"),
-    sparsity = 0.7,
+    sparsity = 0.8,
     beta_range = c(-2, 2),
     sigma = 1,
     seed = NULL,
     z_sd = 1,
-    a_sd = 0.3,
     unstable_idx = NULL,
     unstable_frac = 0.2,
     sigma_low = 1.0,
-    sigma_high = 8.0,
+    sigma_high = 5.0,
     high_prob = 0.1
 ) {
   mode <- match.arg(mode)
   if (!is.null(seed)) set.seed(seed)
   
+  ## --------------------------
+  ## BASIC MODE
+  ## --------------------------
   if (mode == "basic") {
+    # Training design matrix
     X <- matrix(rnorm(n * p), n, p)
     if (is.null(colnames(X))) colnames(X) <- paste0("X", seq_len(p))
     
+    # True coefficients (sparse)
     beta_true <- numeric(p)
     k <- floor(sparsity * p)
     if (k > 0) {
@@ -98,44 +102,124 @@ simulate_capnet_data <- function(
       beta_true[nz] <- runif(k, min = beta_range[1], max = beta_range[2])
     }
     
+    # Training response
     y <- drop(X %*% beta_true + rnorm(n, sd = sigma))
-    L <- pmax(abs(beta_true), 0.1)
     
-    return(list(X = X, y = y, beta_true = beta_true,
-                L = L, Z = X))
+    # Evaluation design matrix (same DGP as X)
+    newx <- matrix(rnorm(m * p), m, p)
+    colnames(newx) <- colnames(X)
+    
+    # Evaluation response
+    newy <- drop(newx %*% beta_true + rnorm(m, sd = sigma))
+    
+    # Caps (scaled true coefficients)
+    L <- pmax(abs(beta_true) * 1.5 * sigma, 0.1)
+    
+    return(list(
+      X = X, 
+      y = y, 
+      newx = newx,
+      newy = newy,
+      beta_true = beta_true,
+      L = L,
+      Z = X,                # in basic mode Z = X
+      newz = newx
+    ))
   }
   
+  ## --------------------------
+  ## PROXY MODE
+  ## --------------------------
+  
+  # Latent predictors
   Z <- matrix(rnorm(n * p, sd = z_sd), n, p)
+  newz <- matrix(rnorm(m * p, sd = z_sd), m, p)
+  
+  # True coefficients (sparse)
   beta_true <- rnorm(p)
   k0 <- floor((1 - sparsity) * p)
   if (k0 > 0) beta_true[sample(seq_len(p), k0)] <- 0
+  
+  # Training response
   y <- drop(Z %*% beta_true + rnorm(n, sd = sigma))
+  newy <- drop(newz %*% beta_true + rnorm(m, sd = sigma))
   
-  a <- exp(rnorm(p, mean = 0, sd = a_sd))
-  mean_part <- sweep(Z, 2, a, "*")
-  
+  # Unstable feature indices (shared across training and evaluation)
   if (is.null(unstable_idx)) {
     k_unstable <- max(1, round(unstable_frac * p))
     unstable_idx <- sort(sample(seq_len(p), k_unstable, replace = FALSE))
   }
   stable_idx <- setdiff(seq_len(p), unstable_idx)
   
-  Eta <- matrix(rnorm(n * p, sd = sigma_low), n, p)
-  if (length(unstable_idx) > 0) {
-    flips <- matrix(rbinom(n * length(unstable_idx), 1, high_prob), n,
-                    length(unstable_idx))
-    sd_mat <- sigma_low + flips * (sigma_high - sigma_low)
-    Eta[, unstable_idx] <- matrix(rnorm(n * length(unstable_idx)), n, 
-                                  length(unstable_idx)) * sd_mat
+  # Training noise
+  Eta <- matrix(0, n, p)
+  if (length(stable_idx) > 0) {
+    Eta[, stable_idx] <- matrix(
+      rnorm(n * length(stable_idx), sd = sigma_low),
+      n, length(stable_idx)
+    )
   }
   
-  X <- mean_part + Eta
-  if (is.null(colnames(X))) colnames(X) <- paste0("X", seq_len(p))
+  if (length(unstable_idx) > 0) {
+    flips <- matrix(
+      rbinom(n * length(unstable_idx), 1, high_prob),
+      n, length(unstable_idx)
+    )
+    sd_mat <- sigma_low + flips * (sigma_high - sigma_low)
+    base_eps <- matrix(
+      rnorm(n * length(unstable_idx)),
+      n, length(unstable_idx)
+    )
+    sign_Z   <- sign(Z[, unstable_idx, drop = FALSE])
+    eps_same_dir <- abs(base_eps) * sign_Z
+    
+    Eta[, unstable_idx] <- eps_same_dir * sd_mat
+  }
   
-  L <- pmax(abs(beta_true), 0.1)
+  # Observed training design matrix
+  X <- Z + Eta
+  colnames(X) <- paste0("X", seq_len(p))
+  
+  Eta_eval <- matrix(0, m, p)
+  
+  if (length(stable_idx) > 0) {
+    Eta_eval[, stable_idx] <- matrix(
+      rnorm(m * length(stable_idx), sd = sigma_low),
+      m, length(stable_idx)
+    )
+  }
+  
+  if (length(unstable_idx) > 0) {
+    flips_eval <- matrix(
+      rbinom(m * length(unstable_idx), 1, high_prob),
+      m, length(unstable_idx)
+    )
+    sd_mat_eval <- sigma_low + flips_eval * (sigma_high - sigma_low)
+    base_eps_eval <- matrix(
+      rnorm(m * length(unstable_idx)),
+      m, length(unstable_idx)
+    )
+    sign_newz <- sign(newz[, unstable_idx, drop = FALSE])
+    eps_same_dir_eval <- abs(base_eps_eval) * sign_newz
+    
+    Eta_eval[, unstable_idx] <- eps_same_dir_eval * sd_mat_eval
+  }
+  
+  newx <- newz + Eta_eval
+  colnames(newx) <- colnames(X)
+  
+  # Caps (scaled true coefficients)
+  L <- pmax(abs(beta_true) * 1.5 * sigma, 0.1)
   
   list(
-    X = X, y = y,beta_true = beta_true,
-    L = L, Z = Z
+    X = X,
+    y = y,
+    newx = newx,
+    newy = newy,
+    beta_true = beta_true,
+    L = L,
+    Z = Z,
+    newz = newz,
+    tail_idx = unstable_idx
   )
 }
