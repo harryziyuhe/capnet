@@ -16,7 +16,7 @@
 #' @export
 #' @method coef capnet
 coef.capnet <- function(x, ...) {
-  coefs <- rbind(x$a0, x$beta)
+  coefs <- matrix(c(x$a0, x$beta), ncol = 1)
   rownames(coefs) <- c("(Intercept)", colnames(x$newx))
   colnames(coefs) <- "beta"
   coefs
@@ -61,7 +61,7 @@ coef.walk_capnet <- function(x, index = NULL, ...) {
 #' @method predict capnet
 predict.capnet <- function(object, newdata  = NULL, type = c("link", "response"), ...) {
   type <- match.arg(type)
-  if (!is.null(newdata)) {
+  if (is.null(newdata)) {
     newx <- object$newx
   } else {
     newx <- as.matrix(newdata)
@@ -74,7 +74,7 @@ predict.capnet <- function(object, newdata  = NULL, type = c("link", "response")
     stop("newdata must have ncol equal to length(coef slopes).")
   }
   
-  eta <- as.numeric(object$a0 + newx %*% object$beta)
+  eta <- object$a0 + newx %*% object$beta
   
   if (type == "link") return(eta)
   
@@ -87,7 +87,7 @@ predict.capnet <- function(object, newdata  = NULL, type = c("link", "response")
   }
   
   mu <- family$linkinv(eta)
-  as.numeric(mu)
+  mu
 }
 
 #' Predict from a walk-forward \code{capnet} fit
@@ -156,6 +156,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
     errs <- cv_errors[ia, , , drop = TRUE]  # L x K
     tot <- rowSums(errs)
     lambda.min <- lambdas[which.min(tot)]
+    bar_width <- (log(max(lambdas)) - log(min(lambdas))) / (length(lambdas) - 1)
     
     df <- data.frame(
       lambda = rep(log(lambdas), times = K),
@@ -164,7 +165,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
     )
     
     p <- ggplot(df, aes(x = .data$lambda, y = .data$error)) +
-      stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.25) +
+      stat_summary(fun.data = mean_se, geom = "errorbar", width = bar_width) +
       stat_summary(fun = mean, geom = "point", size = 2) +
       geom_vline(xintercept = log(lambda.min), linetype = 2) +
       labs(
@@ -182,6 +183,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
     errs <- cv_errors[, il, , drop = TRUE]  # A x K
     tot <- rowSums(errs)
     alpha.min <- alphas[which.min(tot)]
+    bar_width <- (max(alphas) - min(alphas)) / (length(alphas) - 1)
     
     df <- data.frame(
       alpha = rep(alphas, times = K),
@@ -191,7 +193,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
     
     p <- ggplot(df, aes(x = .data$alpha, 
                         y = .data$error)) +
-      stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.25) +
+      stat_summary(fun.data = mean_se, geom = "errorbar", width = bar_width) +
       stat_summary(fun = mean, geom = "point", size = 2) +
       geom_vline(xintercept = alpha.min, linetype = 2) +
       labs(
@@ -232,13 +234,44 @@ plot.capnet_path <- function(x, ...) {
   p <- ggplot(df_long, aes(x = .data$param, 
                            y = .data$coef, 
                            color = .data$feature)) +
-    geom_line() +
+    geom_line(linewidth = 0.8) +
     labs(x = param_name, y = "Coefficient") +
-    theme_minimal()
+    theme_bw() +
+    theme(text = element_text(family = "serif", size = 14))
   print(p)
   invisible(p)
 }
 
+#' Print the violation matrix from \code{capnet_violations} object
+#' 
+#' @param x A fitted object of class \code{"capnet_violations"}.
+#' @param ... Further arguments passed to or from other methods.
+#' 
+#' @return Sparse numeric matrix of contribution cap violations in fitted object x
+#' 
+#' @seealso [capnet_violations()], [print()]
+#' 
+#' @export
+#' @method print capnet_violations
+print.capnet_violations <- function(x, ...) {
+  sparse_x <- Matrix(x$excess, sparse = TRUE)
+  
+  # Default arguments
+  defaults <- list(
+    col.names = TRUE,
+    align     = "right",
+    digits    = 4
+  )
+  
+  # Capture user arguments
+  user_args <- list(...)
+  
+  # Let user override defaults
+  defaults[names(user_args)] <- user_args
+  
+  # Call printSpMatrix safely
+  do.call(printSpMatrix, c(list(x = sparse_x), defaults))
+}
 
 
 
