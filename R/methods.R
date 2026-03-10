@@ -61,7 +61,7 @@ coef.walk_capnet <- function(x, index = NULL, ...) {
 #' @method predict capnet
 predict.capnet <- function(object, newdata  = NULL, type = c("link", "response"), ...) {
   type <- match.arg(type)
-  if (!is.null(newdata)) {
+  if (is.null(newdata)) {
     newx <- object$newx
   } else {
     newx <- as.matrix(newdata)
