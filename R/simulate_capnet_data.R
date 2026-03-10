@@ -132,7 +132,7 @@ simulate_capnet_data <- function(
   X <- mean_part + Eta
   if (is.null(colnames(X))) colnames(X) <- paste0("X", seq_len(p))
   
-  L <- pmax(abs(beta_true), 0.1)
+  L <- pmax(abs(cor(X,y) * 5), 0.1)
   
   list(
     X = X, y = y,beta_true = beta_true,
