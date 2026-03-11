@@ -4,13 +4,15 @@
 \alias{predict.capnet}
 \title{Predict from a fitted \code{capnet} model}
 \usage{
-\method{predict}{capnet}(x, newx = NULL, ...)
+\method{predict}{capnet}(object, newdata = NULL, type = c("link", "response"), ...)
 }
 \arguments{
-\item{x}{A fitted object of class \code{"capnet"}}
+\item{object}{A fitted object of class \code{"capnet"}}
 
-\item{newx}{Optional numeric matrix for prediction. If \code{NULL}, uses
-\code{x$newx}}
+\item{newdata}{Optional numeric matrix for prediction. If \code{NULL}, uses
+\code{object$newx}}
+
+\item{type}{"link" returns linear predictor eta; "response" returns mean mu.}
 
 \item{...}{Further arguments passed to or from other methods.}
 }

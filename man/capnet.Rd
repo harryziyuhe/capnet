@@ -7,21 +7,21 @@
 capnet(
   X,
   y,
-  lambda,
-  alpha,
-  mu,
   L,
-  newx = NULL,
-  par = NULL,
-  multiplier = 1,
+  family = "gaussian",
   intercept = TRUE,
   standardize = TRUE,
+  newx = NULL,
+  multiplier = 1,
+  lambda = 0,
+  alpha = 0,
+  mu = 0,
   lower.limits = NULL,
   upper.limits = NULL,
   tol = 1e-08,
-  maxit = 10000,
-  check.finite = FALSE,
-  verbose = 0
+  maxit = 10000L,
+  par = NULL,
+  ...
 )
 }
 \arguments{
@@ -30,6 +30,25 @@ features and rows are observations.}
 
 \item{y}{Numeric response vector of length \eqn{n}.}
 
+\item{L}{Nonnegative numeric scalar or length-\eqn{p} vector giving the
+contribution ceiling(s). If scalar, the same ceiling is applied to all
+coefficients}
+
+\item{family}{Optional character scalar (e.g. "binomial"), function (e.g.
+\code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).}
+
+\item{intercept}{Logical; should an intercept be fitted? Default \code{TRUE}.}
+
+\item{standardize}{Logical; if \code{TRUE}, columns of \code{X} and \code{y}
+are standardized for fitting; coefficients are returned on the original scale.
+Default \code{TRUE}.}
+
+\item{newx}{Optional numeric matrix with \eqn{p} columns used to evaluate and
+enforce contribution caps. If \code{NULL}, defaults to \code{X}.}
+
+\item{multiplier}{Optional numeric scalar or length-\eqn{n} vector used to
+scale feature contributions during the capping step. Defaults to 1.}
+
 \item{lambda}{Nonnegative numeric scalar; overall strength of the elastic-net
 penalty.}
 
@@ -37,25 +56,6 @@ penalty.}
 \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.}
 
 \item{mu}{Nonnegative numeric scalar; strength of the contribution-cap penalty}
-
-\item{L}{Nonnegative numeric scalar or length-\eqn{p} vector giving the
-contribution ceiling(s). If scalar, the same ceiling is applied to all
-coefficients}
-
-\item{newx}{Optional numeric matrix with \eqn{p} columns used to evaluate and
-enforce contribution caps. If \code{NULL}, defaults to \code{X}.}
-
-\item{par}{Optional numeric vector of length \eqn{p} with initial coefficient
-values. If \code{NULL}, uses zero initialization.}
-
-\item{multiplier}{Optional numeric scalar or length-\eqn{n} vector used to
-scale feature contributions during the capping step. Defaults to 1.}
-
-\item{intercept}{Logical; should an intercept be fitted? Default \code{TRUE}.}
-
-\item{standardize}{Logical; if \code{TRUE}, columns of \code{X} and \code{y}
-are standardized for fitting; coefficients are returned on the original scale.
-Default \code{TRUE}.}
 
 \item{lower.limits}{Optional numeric scalar or length-\eqn{p} vector of lower
 bounds on coefficients. Initial values must satisfy the bounds.}
@@ -69,11 +69,10 @@ bounds on coefficients. Initial values must satisfy the bounds.}
 \item{maxit}{Integer; maximum number of quasi-Newton iterations. Default
 \code{1e5}.}
 
-\item{check.finite}{Logical; if \code{TRUE}, detect and report non-finite
-values encountered in the loss/gradient. Default \code{FALSE}.}
+\item{par}{Optional numeric vector of length \eqn{p} with initial coefficient
+values. If \code{NULL}, uses zero initialization.}
 
-\item{verbose}{Integer; \code{0} for silent, \code{1} to print optimization
-progress. Default \code{0}.}
+\item{...}{Additional arguments used in fitting. Currently unused.}
 }
 \value{
 An object of class \code{"capnet"} with components:
@@ -93,6 +92,7 @@ convergence, negative values indicate OWL-QN/L-BFGS execution errors.}
 \item{\code{mu}}{mu value passed in input.}
 \item{\code{L}}{L value passed in input.}
 \item{\code{multiplier}}{multiplier value passed in input.}
+\item{\code{family}}{model family passed in input.}
 \item{\code{call}}{The matched call.}
 }
 \description{

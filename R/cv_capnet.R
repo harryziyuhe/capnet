@@ -4,6 +4,8 @@
 #' cross-validation for the \code{capnet()} model. Returns the searched grid,
 #' fold-wise errors, mean errors, and the best hyperparameters.
 #' 
+#' @importFrom stats sd
+#' 
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
 #'  features and rows are observations.
 #' @param y Numeric response vector of length \eqn{n}.
@@ -11,6 +13,9 @@
 #' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
 #'  contribution ceiling(s). If scalar, the same ceiling is applied to all
 #'  coefficients
+#' @param family Optional character scalar (e.g. "binomial"), function (e.g. 
+#' \code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).
+#' @param intercept Logical; should an intercept be fitted? Default \code{TRUE}.
 #' @param lambda Numeric vector (default \code{exp(seq(1, -5, length.out = 50))})
 #'  of nonnegative elastic-net penalty strengths to search.
 #' @param alpha Numeric vector (default \code{seq(0, 1, length.out = 5)}) with

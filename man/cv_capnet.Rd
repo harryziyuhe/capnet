@@ -9,14 +9,16 @@ cv_capnet(
   y,
   mu,
   L,
+  family = "gaussian",
   lambda = exp(seq(1, -5, length.out = 50)),
   alpha = seq(0, 1, length.out = 5),
   newx = NULL,
   multiplier = 1,
+  intercept = TRUE,
   standardize = TRUE,
   splits = NULL,
   K = 5,
-  metric = "mse",
+  metric = c("mse", "rsq", "logloss", "brier", "deviance"),
   verbose = 0,
   ...
 )
@@ -33,6 +35,9 @@ features and rows are observations.}
 contribution ceiling(s). If scalar, the same ceiling is applied to all
 coefficients}
 
+\item{family}{Optional character scalar (e.g. "binomial"), function (e.g.
+\code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).}
+
 \item{lambda}{Numeric vector (default \code{exp(seq(1, -5, length.out = 50))})
 of nonnegative elastic-net penalty strengths to search.}
 
@@ -45,6 +50,8 @@ apply contribution caps. If \code{NULL}, defaults to \code{X}.}
 
 \item{multiplier}{Optional numeric scalar or length-\eqn{n} vector used to
 scale feature contributions during the capping step; defaults to 1.}
+
+\item{intercept}{Logical; should an intercept be fitted? Default \code{TRUE}.}
 
 \item{standardize}{Logical; if \code{TRUE}, columns of \code{X} and \code{y}
 are standardized for fitting; coefficients are returned on the original scale.
@@ -59,7 +66,7 @@ K-fold CV is created internally using \code{K}.}
 set to \code{length(unique(splits))}.}
 
 \item{metric}{Character string; CV scoring metric: \code{"mse"} (lower is
-better) or \code{"rsq"} (higher is better). Default \code{"mse"}.}
+better) or \code{"rsq"} (higher is better). Default chosen based on fitted model type.}
 
 \item{verbose}{Integer; \code{0} for silent, \code{1} to print progress.}
 
@@ -70,6 +77,10 @@ better) or \code{"rsq"} (higher is better). Default \code{"mse"}.}
 An object of class \code{"cv_capnet"} with components:
 \item{\code{alpha}}{Numeric vector of alpha values searched.}
 \item{\code{lambda}}{Numeric vector of lambda values searched.}
+\item{\code{mu}}{mu value passed in input.}
+\item{\code{L}}{L value passed in input.}
+\item{\code{metric}}{Metric used to evaluate performance.}
+\item{\code{splits}}{Cross-validation splits.}
 \item{\code{cv_errors}}{Numeric array of shape
 \eqn{A\times L\times K} with fold-wise errors for each
 \code{alpha} (\eqn{A}) and \code{lambda}(\eqn{L}) pair across folds.}

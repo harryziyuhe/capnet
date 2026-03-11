@@ -6,7 +6,7 @@
 #' of latent drivers. In \code{mode = "basic"}, there are no latent drivers, so
 #' \code{Z} is set to \code{X}.
 #' 
-#' @importFrom stats rnorm runif rbinom
+#' @importFrom stats rnorm runif rbinom cor
 #'
 #' @param n Integer; number of observations. Default \code{100}.
 #' @param p Integer; number of predictors. Default \code{20}.
