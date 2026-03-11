@@ -1,7 +1,7 @@
 Package: capnet
 Type: Package
 Title: Contribution-Capped Elastic Net Model for Stable Feature Contributions
-Version: 0.1.0
+Version: 0.2.0
 Date: 2025-11-03
 Authors@R:
     c(
