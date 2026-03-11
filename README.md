@@ -3,7 +3,7 @@
 
 ## Why
 ### Quantitative Finance Use Case
-In financial modeling, predictive features often exhibit unstable variance and regime-dependent scaling--whether derived from volatility measures, fundamentals, technical ratios, or alternative data. These shifts often reflect real changes in the market structure rather than mere noise.
+In financial modeling, predictive features often exhibit fat-tails, especially in volatile market regimes. These shifts often reflect real changes in the market structure rather than mere noise.
 
 Traditional regularization methods with L1 and L2 penalties constrain coefficients, not contributions, and therefore cannot directly control how much any single feature drives model predictions. In fact, the coefficient-shrinking behavior of these penalties can inadvertently magnify the dominance of the most predictive or volatile features. When one variable carries disproportionately large variance--especially when such cases are underrepresented in the training sample--it can dominate the prediction output, leading to undesired idiosyncratic exposure. Conceptually, this mirrors porftolio construction: just as excess reliance on a single asset increases portfolio risk, excess reliance on one predictive feature increases model risk.
 
