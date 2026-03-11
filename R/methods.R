@@ -216,7 +216,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
 #'
 #' @return The \code{ggplot} is printed; the plot x is returned invisibly.
 #'
-#' @importFrom ggplot2 ggplot aes geom_line labs theme_minimal
+#' @importFrom ggplot2 ggplot aes geom_line labs theme_minimal theme_bw theme element_text
 #' @importFrom rlang .data
 #' @export
 #' @method plot capnet_path
@@ -246,6 +246,8 @@ plot.capnet_path <- function(x, ...) {
 #' 
 #' @param x A fitted object of class \code{"capnet_violations"}.
 #' @param ... Further arguments passed to or from other methods.
+#' 
+#' @importFrom Matrix Matrix printSpMatrix
 #' 
 #' @return Sparse numeric matrix of contribution cap violations in fitted object x
 #' 

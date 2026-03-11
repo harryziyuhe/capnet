@@ -18,7 +18,9 @@ Imports:
     lbfgs,
     ggplot2,
     xts,
-    zoo
+    zoo,
+    Matrix,
+    stats
 Suggests:
     knitr,
     rmarkdown,

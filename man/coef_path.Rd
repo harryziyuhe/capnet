@@ -11,7 +11,6 @@ coef_path(
   lambda = exp(seq(1, -5, length.out = 50)),
   alpha = 0.5,
   mu = 1,
-  standardize = TRUE,
   ...
 )
 }
@@ -33,10 +32,6 @@ Ridge.}
 
 \item{mu}{Nonnegative numeric scalar; strength of the contribution-cap
 penalty (default \code{1}).}
-
-\item{standardize}{Logical; if \code{TRUE}, columns of \code{X} and \code{y}
-are standardized for fitting; coefficients are returned on the original scale.
-Default \code{TRUE}.}
 
 \item{...}{Additional arguments forwarded to \code{capnet()}, e.g.,
 \code{newx}, \code{par}, \code{multiplier}, \code{intercept},
