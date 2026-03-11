@@ -7,6 +7,7 @@
 #' present. 
 #' 
 #' @importFrom lbfgs lbfgs
+#' @importFrom stats sd
 #' 
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
 #'  features and rows are observations.
@@ -39,8 +40,7 @@
 #'  \code{1e5}.
 #' @param par Optional numeric vector of length \eqn{p} with initial coefficient
 #'  values. If \code{NULL}, uses zero initialization. 
-#' @param verbose Integer; \code{0} for silent, \code{1} to print optimization
-#'  progress. Default \code{0}.
+#' @param ... Additional arguments used in fitting. Currently unused.
 #' 
 #' @return An object of class \code{"capnet"} with components:
 #'  \item{\code{a0}}{Best intercept (numeric scalar).}

@@ -18,10 +18,7 @@ library(glmnet)
 library(lbfgs)
 library(xtable)
 library(ggplot2)
-source("../R/simulate_capnet_data.R")
-source("../R/capnet.R")
-source("../R/cv_capnet.R")
-source("../R/plot_redistribution.R")
+library(capnet)
 options(scipen = 0)
 convergence.table <- NULL
 ```

@@ -84,7 +84,8 @@
     )
     d_excess <- excess_contribution * sign(feature_contribution) * cap$newx
     gradient_cap <- (2 * params$mu / m) * colSums(d_excess)
-    
+    #print(gradient_cap)
+
     gradient_rest <- gradient_rest + gradient_cap
     
     gradient_rest[beta_rest <= train$lower.limits + train$tol & gradient_rest > 0] <- 0

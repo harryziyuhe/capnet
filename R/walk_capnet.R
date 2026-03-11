@@ -30,7 +30,9 @@
 #' @param lambda Nonnegative numeric scalar; overall strength of the elastic net penalty. 
 #' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
 #'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
-#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty
+#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty.
+#' @param max_mu_tries Optional numeric scalar; maximum number of tries of different 
+#'  mu values for convergence. See \link[=walk_capnet]{Details}.
 #' @param ... Additional arguments used in fitting. See [capnet()] for more details.
 #' 
 #' @return An object of class \code{"walk_capnet"} with components:

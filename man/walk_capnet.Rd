@@ -7,19 +7,18 @@
 walk_capnet(
   X,
   y,
-  lambda,
-  alpha,
-  mu,
   L,
   newx,
-  walk = 1,
-  par = NULL,
-  multiplier = 1,
+  family = "gaussian",
+  intercept = TRUE,
   standardize = TRUE,
-  lower.limits = NULL,
-  upper.limits = NULL,
-  tol = 1e-08,
-  maxit = 10000
+  multiplier = 1,
+  walk = 1,
+  lambda = 0,
+  alpha = 0,
+  mu = 0,
+  max_mu_tries = 6,
+  ...
 )
 }
 \arguments{
@@ -28,13 +27,6 @@ features and rows are observations.}
 
 \item{y}{Numeric response vector of length \eqn{n}.}
 
-\item{lambda}{Nonnegative numeric scalar; overall strength of the elastic net penalty.}
-
-\item{alpha}{Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
-\code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.}
-
-\item{mu}{Nonnegative numeric scalar; strength of the contribution-cap penalty}
-
 \item{L}{Nonnegative numeric scalar or length-\eqn{p} vector giving the
 contribution ceiling(s). If scalar, the same ceiling is applied to all
 coefficients}
@@ -42,30 +34,32 @@ coefficients}
 \item{newx}{Optional numeric matrix with \eqn{p} columns used to evaluate and
 enforce contribution caps. If \code{NULL}, defaults to \code{X}.}
 
-\item{walk}{Integer; number of consecutive rows predicted at each step before
-advancing the window. Default \code{1}.}
+\item{family}{Optional character scalar (e.g. "binomial"), function (e.g.
+\code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).}
 
-\item{par}{Optional numeric vector of length \eqn{p} with initial coefficient
-values. If \code{NULL}, uses zero initialization.}
-
-\item{multiplier}{Optional numeric scalar or length-\eqn{n} vector used to
-scale feature contributions during the capping step. Defaults to 1.}
+\item{intercept}{Logical; should an intercept be fitted? Default \code{TRUE}.}
 
 \item{standardize}{Logical; if \code{TRUE}, columns of \code{X} and \code{y}
 are standardized for fitting; coefficients are returned on the original scale.
 Default \code{TRUE}.}
 
-\item{lower.limits}{lower.limits Optional numeric scalar or length-\eqn{p} vector of lower
-bounds on coefficients. Initial values must satisfy the bounds.}
+\item{multiplier}{Optional numeric scalar or length-\eqn{n} vector used to
+scale feature contributions during the capping step. Defaults to 1.}
 
-\item{upper.limits}{Optional numeric scalar or length-\eqn{p} vector of upper
-bounds on coefficients. Initial values must satisfy the bounds.}
+\item{walk}{Integer; number of consecutive rows predicted at each step before
+advancing the window. Default \code{1}.}
 
-\item{tol}{Nonnegative numeric tolerance used for gradient masking when
-\code{lower.limits} or \code{upper.limits} are specified. Default \code{1e-8}.}
+\item{lambda}{Nonnegative numeric scalar; overall strength of the elastic net penalty.}
 
-\item{maxit}{Integer; maximum number of quasi-Newton iterations. Default
-\code{1e5}.}
+\item{alpha}{Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
+\code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.}
+
+\item{mu}{Nonnegative numeric scalar; strength of the contribution-cap penalty.}
+
+\item{max_mu_tries}{Optional numeric scalar; maximum number of tries of different
+mu values for convergence. See \link[=walk_capnet]{Details}.}
+
+\item{...}{Additional arguments used in fitting. See \code{\link[=capnet]{capnet()}} for more details.}
 }
 \value{
 An object of class \code{"walk_capnet"} with components:
