@@ -1,0 +1,503 @@
+---
+title: "Market Timing Model Example"
+author: "Harry He"
+date: "2026-03-16"
+output: rmarkdown::html_vignette
+bibliography: references.bib
+vignette: >
+  %\VignetteIndexEntry{Market Timing Model Example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+header-includes:
+  - \usepackage{makecell}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(glmnet)
+library(lbfgs)
+library(xtable)
+library(ggplot2)
+library(capnet)
+library(tidyverse)
+library(zoo)
+```
+
+```{r data}
+data <- read.csv(system.file("extdata", "data.csv", package = "capnet"))
+vars_to_keep <- c("X", "target", "S2", "E2", "E3", "P9", "S1", "S5", "I2", "P8", 
+                  "P10", "P12", "P13", "U1", "U2", "V11")
+data <- data |> 
+  mutate(
+    `U1` = `I1`-`I2`,
+    `U2` = `M11` / (`I2` + `I9` + `I7`) * 3
+  ) |> 
+  select(all_of(vars_to_keep))
+  
+```
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(glmnet)
+library(purrr)
+
+rolling_elastic_net <- function(df,
+                                date_col = "X",
+                                target_col = "target",
+                                alpha = 0.5,
+                                window_years = 20,
+                                nfolds = 10,
+                                standardize = TRUE,
+                                lambda_choice = c("lambda.min", "lambda.1se"),
+                                min_obs = 100,
+                                eval_start = "2020-01-01") {
+  
+  lambda_choice <- match.arg(lambda_choice)
+  eval_start <- as.Date(eval_start)
+  
+  stopifnot(date_col %in% names(df))
+  stopifnot(target_col %in% names(df))
+  
+  df <- df %>%
+    mutate(.date = as.Date(.data[[date_col]])) %>%
+    arrange(.date) %>%
+    filter(!is.na(.date), !is.na(.data[[target_col]])) %>%
+    mutate(.refit_month = lubridate::floor_date(.date, unit = "month"))
+  
+  feature_cols <- setdiff(names(df), c(date_col, target_col, ".date", ".refit_month"))
+  
+  non_numeric <- feature_cols[!sapply(df[feature_cols], is.numeric)]
+  if (length(non_numeric) > 0) {
+    warning(
+      "Dropping non-numeric feature columns: ",
+      paste(non_numeric, collapse = ", ")
+    )
+  }
+  
+  feature_cols <- feature_cols[sapply(df[feature_cols], is.numeric)]
+  
+  if (length(feature_cols) == 0) {
+    stop("No numeric feature columns available.")
+  }
+  
+  refit_months <- sort(unique(df$.refit_month))
+  refit_months <- refit_months[refit_months >= lubridate::floor_date(eval_start, "month")]
+  
+  results <- vector("list", length(refit_months))
+  model_info <- vector("list", length(refit_months))
+  coef_store <- vector("list", length(refit_months))
+  contrib_store <- vector("list", length(refit_months))
+  contrib_summary_store <- vector("list", length(refit_months))
+  
+  for (i in seq_along(refit_months)) {
+    pred_month <- refit_months[i]
+    
+    train_end <- pred_month - lubridate::days(1)
+    train_start <- pred_month %m-% lubridate::years(window_years)
+    
+    train_df <- df %>%
+      filter(.date >= train_start, .date <= train_end)
+    
+    test_df <- df %>%
+      filter(.refit_month == pred_month)
+    
+    if (nrow(train_df) < min_obs || nrow(test_df) == 0) {
+      results[[i]] <- NULL
+      model_info[[i]] <- tibble::tibble(
+        refit_month = pred_month,
+        train_start = train_start,
+        train_end = train_end,
+        n_train = nrow(train_df),
+        n_test = nrow(test_df),
+        lambda = NA_real_
+      )
+      coef_store[[i]] <- NULL
+      contrib_store[[i]] <- NULL
+      contrib_summary_store[[i]] <- NULL
+      next
+    }
+    
+    train_use <- train_df %>%
+      dplyr::select(dplyr::all_of(c(target_col, feature_cols))) %>%
+      dplyr::filter(dplyr::if_all(dplyr::everything(), ~ !is.na(.)))
+    
+    test_use <- test_df %>%
+      dplyr::select(dplyr::all_of(c(date_col, target_col, feature_cols, ".date", ".refit_month"))) %>%
+      dplyr::filter(dplyr::if_all(dplyr::all_of(feature_cols), ~ !is.na(.)))
+    
+    if (nrow(train_use) < min_obs || nrow(test_use) == 0) {
+      results[[i]] <- NULL
+      model_info[[i]] <- tibble::tibble(
+        refit_month = pred_month,
+        train_start = train_start,
+        train_end = train_end,
+        n_train = nrow(train_use),
+        n_test = nrow(test_use),
+        lambda = NA_real_
+      )
+      coef_store[[i]] <- NULL
+      contrib_store[[i]] <- NULL
+      contrib_summary_store[[i]] <- NULL
+      next
+    }
+    
+    x_train <- as.matrix(train_use[, feature_cols, drop = FALSE])
+    y_train <- train_use[[target_col]]
+    x_test  <- as.matrix(test_use[, feature_cols, drop = FALSE])
+    
+    cvfit <- glmnet::cv.glmnet(
+      x = x_train,
+      y = y_train,
+      alpha = alpha,
+      nfolds = nfolds,
+      standardize = standardize
+    )
+    
+    chosen_lambda <- switch(
+      lambda_choice,
+      "lambda.min" = cvfit$lambda.min,
+      "lambda.1se" = cvfit$lambda.1se
+    )
+    
+    preds <- as.numeric(stats::predict(cvfit, newx = x_test, s = chosen_lambda))
+    
+    # Extract coefficients at chosen lambda
+    coef_mat <- as.matrix(stats::coef(cvfit, s = chosen_lambda))
+    coef_df <- tibble::tibble(
+      feature = rownames(coef_mat),
+      coefficient = as.numeric(coef_mat[, 1])
+    )
+    
+    intercept_val <- coef_df$coefficient[coef_df$feature == "(Intercept)"]
+    beta_df <- coef_df %>%
+      dplyr::filter(feature != "(Intercept)")
+    
+    # Save coefficient path snapshot for this monthly refit
+    coef_store[[i]] <- beta_df %>%
+      dplyr::mutate(
+        refit_month = pred_month,
+        lambda = chosen_lambda
+      ) %>%
+      dplyr::select(refit_month, lambda, feature, coefficient)
+    
+    # Compute per-observation per-feature contribution in test month
+    beta_vec <- beta_df$coefficient
+    names(beta_vec) <- beta_df$feature
+    
+    contrib_mat <- sweep(x_test, 2, beta_vec[colnames(x_test)], `*`)
+    
+    contrib_long <- as.data.frame(contrib_mat) %>%
+      tibble::as_tibble() %>%
+      dplyr::mutate(
+        !!date_col := test_use[[date_col]],
+        refit_month = test_use$.refit_month,
+        actual = test_use[[target_col]],
+        predicted = preds,
+        intercept = intercept_val,
+        .row_id = dplyr::row_number()
+      ) %>%
+      tidyr::pivot_longer(
+        cols = dplyr::all_of(feature_cols),
+        names_to = "feature",
+        values_to = "contribution"
+      ) %>%
+      dplyr::select(.row_id, dplyr::all_of(date_col), refit_month, actual, predicted, intercept, feature, contribution)
+    
+    contrib_store[[i]] <- contrib_long
+    
+    # Optional monthly summary: average signed and absolute contribution by feature
+    contrib_summary_store[[i]] <- contrib_long %>%
+      dplyr::group_by(refit_month, feature) %>%
+      dplyr::summarise(
+        mean_contribution = mean(contribution, na.rm = TRUE),
+        mean_abs_contribution = mean(abs(contribution), na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    results[[i]] <- test_use %>%
+      dplyr::transmute(
+        !!date_col := .data[[date_col]],
+        refit_month = .refit_month,
+        actual = .data[[target_col]],
+        predicted = preds
+      )
+    
+    model_info[[i]] <- tibble::tibble(
+      refit_month = pred_month,
+      train_start = train_start,
+      train_end = train_end,
+      n_train = nrow(train_use),
+      n_test = nrow(test_use),
+      lambda = chosen_lambda,
+      intercept = intercept_val
+    )
+  }
+  
+  predictions <- dplyr::bind_rows(results) %>%
+    dplyr::arrange(.data[[date_col]])
+  
+  model_log <- dplyr::bind_rows(model_info)
+  coefficients <- dplyr::bind_rows(coef_store)
+  contributions <- dplyr::bind_rows(contrib_store)
+  contribution_summary <- dplyr::bind_rows(contrib_summary_store)
+  
+  metrics <- predictions %>%
+    dplyr::summarise(
+      rmse = sqrt(mean((actual - predicted)^2, na.rm = TRUE)),
+      mae = mean(abs(actual - predicted), na.rm = TRUE),
+      cor = stats::cor(actual, predicted, use = "complete.obs")
+    )
+  
+  list(
+    predictions = predictions,
+    model_log = model_log,
+    coefficients = coefficients,
+    contributions = contributions,
+    contribution_summary = contribution_summary,
+    metrics = metrics,
+    feature_cols = feature_cols
+  )
+}
+
+calc_oos_r2 <- function(pred_df) {
+
+  pred_df <- pred_df |>
+    arrange(X)
+
+  # expanding historical mean benchmark
+  pred_df$mean_benchmark <- c(NA, cummean(head(pred_df$actual, -1)))
+
+  pred_df <- pred_df |>
+    dplyr::filter(!is.na(mean_benchmark))
+
+  sse_model <- sum((pred_df$actual - pred_df$predicted)^2)
+  sse_bench <- sum((pred_df$actual - pred_df$mean_benchmark)^2)
+
+  r2_oos <- 1 - sse_model / sse_bench
+
+  return(r2_oos)
+}
+
+rolling_oos_r2 <- function(pred_df, window = 20) {
+
+  pred_df <- pred_df |>
+    arrange(X)
+
+  pred_df$mean_benchmark <- c(NA, cummean(head(pred_df$actual, -1)))
+
+  pred_df <- pred_df |>
+    filter(!is.na(mean_benchmark))
+
+  pred_df <- pred_df |>
+    mutate(
+      se_model = (actual - predicted)^2,
+      se_bench = (actual - mean_benchmark)^2
+    )
+
+  pred_df |>
+    mutate(
+      r2_roll = 1 - rollapply(se_model, window, sum, fill = NA, align = "right") /
+                     rollapply(se_bench, window, sum, fill = NA, align = "right")
+    )
+}
+```
+
+```{r}
+fit <- rolling_elastic_net(
+  data,
+  date_col = "X",
+  target_col = "target",
+  alpha = 0.5,
+  window_years = 25,
+  lambda_choice = "lambda.min",
+  eval_start = "2020-01-01"
+)
+```
+
+```{r}
+fit$coefficients
+```
+```{r}
+plot_feature_contribution <- function(df, feat) {
+  feature_df <- df |> 
+    filter(feature == feat)
+  scaling = (max(rolling_r2$r2_roll) - min(rolling_r2$r2_roll)) / (max(feature_df$contribution) - min(feature_df$contribution))
+  ggplot(feature_df, aes(x = X, y = contribution, group = 1)) +
+    geom_line(color = "steelblue") +
+    geom_line(data = rolling_r2, aes(x = X, y = r2_roll / scaling, group = 1), color = "red") +
+    labs(
+      x = "Date",
+      y = "Contribution"
+    ) +
+    theme_minimal()
+}
+```
+
+```{r}
+plot_feature_contribution(fit$contributions, "V11")
+```
+
+
+```{r}
+rolling_r2 <- rolling_oos_r2(fit$predictions, window = 20) |> drop_na()
+
+ggplot(rolling_r2, aes(x = X, y = r2_roll, group = 1)) +
+  geom_line(color = "steelblue") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Rolling Out-of-Sample R²",
+    x = "Date",
+    y = "R²"
+  ) +
+  theme_minimal()
+```
+```{r}
+calc_oos_r2(fit$predictions)
+```
+
+
+
+```{r experiment, results = "asis"}
+for (i in seq(-5, 10)) {
+  # Regular model
+  model1 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence1 <- model1$convergence
+  
+  # Larger lambda model
+  model2 <- capnet(X, y, alpha = 0.5, lambda = 0.5,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence2 <- model2$convergence
+  
+  # No elastic net penalty model
+  model3 <- capnet(X, y, alpha = 0.5, lambda = 0,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence3 <- model3$convergence
+  
+  # Ridge regression model
+  model4 <- capnet(X, y, alpha = 0, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence4 <- model4$convergence
+  
+  # LASSO regression model
+  model5 <- capnet(X, y, alpha = 1, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 1)
+  convergence5 <- model5$convergence
+  
+  # Large multiplier model
+  model6 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = X, standardize = TRUE, multiplier = 100)
+  convergence6 <- model6$convergence
+  
+  # Small L model
+  model7 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 mu = 10 ** i, L = L/2, newx = X, standardize = TRUE, multiplier = 1)
+  convergence7 <- model7$convergence
+  
+  # Different `newx` model
+  model8 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 mu = 10 ** i, L = L, newx = maxx, standardize = TRUE, multiplier = 1)
+  convergence8 <- model8$convergence
+  
+  convergence.table <- rbind(convergence.table,
+                             c(convergence1, convergence2,
+                               convergence3, convergence4,
+                               convergence5, convergence6,
+                               convergence7, convergence8))
+  
+}
+```
+
+```{r table, results='asis', echo=FALSE, message=FALSE, warning=FALSE}
+convergence.table <- as.data.frame(convergence.table)
+convergence.table[] <- lapply(convergence.table, as.character)
+convergence.table <- cbind(10 ** seq(-5, 10), convergence.table)
+colnames(convergence.table) <- c(
+  "Mu",
+  "Base",
+  "Large Lambda",
+  "No Elastic Net",
+  "Ridge",
+  "LASSO",
+  "Large Multiplier",
+  "Small L",
+  "Single Max Row"
+)
+
+if (knitr::is_latex_output()) {
+  # Use xtable for LaTeX/PDF output
+  print(
+    xtable::xtable(convergence.table, display = c(rep("g", 10))),
+    math.style.exponents = TRUE,
+    sanitize.colnames.function = identity,
+    comment = FALSE
+  )
+} else {
+  # Use knitr::kable for HTML output
+  knitr::kable(convergence.table, format = "html")
+}
+```
+
+The table show that the model encounters no convergence failure with most $\mu$ values, but when $\mu$ becomes extremely large (greater than $10^5$ or $10^6$), convergence may fail. It is also worth noting that when the L1 term is dropped in the loss function, the model has trouble converging with smaller values of $\mu$. Changing $\lambda$ and multiplier values do not significantly impact model's ability to converge. Finally, if we force the same contribution cap constraints but aggregate evaluation matrix to one row of observation, the model is more likely to encounter convergence failure with larger $\mu$ values. This is because the optimizer takes an average of all contribution cap excess when calculating the loss and gradient values, so having more observations moderates the strength of contribution cap panelty in each iteration, leading to easier and smoother convergence.
+
+```{r lambda-values}
+lambdas0 <- lambdas10 <- lambdas1000 <- c()
+for (i in 1:50) {
+  lambda0.tmp <- cv_capnet(X, y, mu = 0, L = L, 
+                           alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
+                           newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
+  lambda10.tmp <- cv_capnet(X, y, mu = 10, L = L,
+                            alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
+                            newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
+  lambda1000.tmp <- cv_capnet(X, y, mu = 1000, L = L,
+                              alpha = 0.5, lambda = 10^seq(-7, -1, length.out = 7),
+                              newx = maxx, standardize = TRUE, multiplier = 1)$best_lambda
+  lambdas0 <- c(lambdas0, lambda0.tmp)
+  lambdas10 <- c(lambdas10, lambda10.tmp)
+  lambdas1000 <- c(lambdas1000, lambda1000.tmp)
+}
+```
+
+```{r plot-lambda, echo = FALSE, fig.width=9, fig.height=5, out.width='100%'}
+best_lambdas <- as.data.frame(rbind(cbind(lambdas0, 0),
+                              cbind(lambdas10, 10),
+                              cbind(lambdas1000, 1000)))
+names(best_lambdas) <- c("lambda", "mu")
+
+ggplot(best_lambdas) +
+  geom_density(aes(x = lambda, color = as.factor(mu))) +
+  scale_x_continuous(trans='log10') +
+  labs(x = "Lambda", y = "Density", color = "mu") +
+  theme_minimal()
+```
+
+Clearly, we see divergence in the optimal $\mu$ value from cross-validation when the contribution cap penalty is activated. This can potentially be explained by the fact that the contribution penalty also restrains the size of the parameters, and by imposing a constraint on the size of the feature contributions, the user is also punishing parameters from being too large. Setting $\lambda$ too large when contribution cap is present may over-penalize the model and lead to worse performances. 
+
+```{r t-test, echo = FALSE}
+print(t.test(lambdas0, lambdas10))
+print(t.test(lambdas10, lambdas1000))
+```
+
+The t-tests also confirm the observation; however, we do not observe meaningful differences in $\lambda$ values between models with $\mu$ values set to $10$ and $1000$ respectively. This means that the optimal $\mu$ value is not as sensitive to the strength of the contribution cap penalty.
+
+```{r}
+capmod1 <- capnet(X, y, alpha = 0.5, lambda = mean(lambdas0),
+                  mu = 100, L = L, newx = maxx)
+capmod2 <- capnet(X, y, alpha = 0.5, lambda = mean(lambdas1000),
+                  mu = 100, L = L, newx = maxx)
+print(capmod1$value / capmod2$value)
+```
+
+The loss is apparently when choosing the less optimal $\lambda$ value. The practical implication fo this is that the user should be cautious using $\lambda$ values derived from functions such as `glmnet` (which conforms with the $\mu=0$ case) when fitting a contribution cap model.
+
+
+
+
+
+
+
+
+
+
+
