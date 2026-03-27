@@ -14,20 +14,43 @@ header-includes:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(glmnet)
-library(lbfgs)
-library(xtable)
-library(ggplot2)
+
+# Core package (required)
 library(capnet)
-library(tidyverse)
-library(zoo)
-library(dplyr)
-library(lubridate)
-library(glmnet)
-library(purrr)
+
+# Optional packages for vignette
+needed <- c(
+  "glmnet", "lbfgs", "xtable", "ggplot2",
+  "dplyr", "tidyr", "purrr", "lubridate", "zoo"
+)
+
+missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
+
+if (length(missing) > 0) {
+  knitr::opts_chunk$set(eval = FALSE)
+  message(
+    "Optional packages not installed: ",
+    paste(missing, collapse = ", "),
+    ". Code chunks will not be evaluated."
+  )
+} else {
+  library(glmnet)
+  library(lbfgs)
+  library(xtable)
+  library(ggplot2)
+  library(dplyr)
+  library(tidyr)
+  library(purrr)
+  library(lubridate)
+  library(zoo)
+}
+
+if (length(missing) == 0) {
+  source("helpers.R", local = knitr::knit_global())
+}
 ```
 
-```{r data}
+```{r data, result="asis"}
 data <- read.csv(system.file("extdata", "data.csv", package = "capnet"))
 vars_to_keep <- c("X", "target", "S2", "E2", "E3", "P9", "S1", "S5", "I2", "P8", 
                   "P10", "P12", "P13", "U1", "U2")
@@ -37,271 +60,13 @@ data <- data |>
     `U2` = `M11` / (`I2` + `I9` + `I7`) * 3
   ) |> 
   select(all_of(vars_to_keep))
-  
+
+
+print(calc_moments(data[, c(-1,-2)]))
 ```
 
-```{r helper, include = FALSE}
-postcap_predict <- function(object, newx, L) {
-  beta <- as.numeric(object$beta)
-  a0 <- if (!is.null(object$a0)) as.numeric(object$a0) else 0
-
-  contrib <- sweep(newx, 2, beta, `*`)
-
-  if (length(L) == 1L) {
-    contrib_capped <- pmax(pmin(contrib, L), -L)
-  } else {
-    if (length(L) != ncol(newx)) {
-      stop("Length of L must be 1 or equal to ncol(newx).")
-    }
-    L_mat <- matrix(rep(L, each = nrow(newx)), nrow = nrow(newx))
-    contrib_capped <- pmax(pmin(contrib, L_mat), -L_mat)
-  }
-
-  as.numeric(a0 + rowSums(contrib_capped))
-}
-
-rolling_elastic_net <- function(df,
-                                date_col = "X",
-                                target_col = "target",
-                                alpha = 0.5,
-                                window_years = 20,
-                                nfolds = 10,
-                                standardize = TRUE,
-                                method = c("capnet_walk", "capnet", "glmnet", "postcap"),
-                                capnet_mu = c(0),
-                                walk_mu = c(0.1, 1, 10, 100),
-                                min_obs = 100,
-                                eval_start = "2020-01-01",
-                                seed = 42) {
-  eval_start <- as.Date(eval_start)
-  
-  stopifnot(date_col %in% names(df), target_col %in% names(df))
-  
-  df <- df %>% 
-    dplyr::mutate(
-      .date = as.Date(.data[[date_col]]),
-      .refit_month = lubridate::floor_date(.date, "month")
-    ) %>% 
-    dplyr::filter(!is.na(.date), !is.na(.data[[target_col]])) %>% 
-    dplyr::arrange(.date)
-  
-  feature_cols <- setdiff(names(df), c(date_col, target_col, ".date", ".refit_month"))
-  feature_cols <- feature_cols[sapply(df[feature_cols], is.numeric)]
-  
-  if (length(feature_cols) == 0) {
-    stop("No numeric feature columns available.")
-  }
-  
-  refit_months <- sort(unique(df$.refit_month))
-  refit_months <- refit_months[refit_months >= lubridate::floor_date(eval_start, "month")]
-  
-  pred_list <- vector("list", length(refit_months))
-  lambda_vec <- rep(NA_real_, length(refit_months))
-
-  for (i in seq_along(refit_months)) {
-    pred_month <- refit_months[i]
-    train_end <- pred_month - lubridate::days(1)
-    train_start <- pred_month %m-% lubridate::years(window_years)
-    
-    train_use <- df %>% 
-      dplyr::filter(.date >= train_start, .date <= train_end) %>% 
-      dplyr::select(dplyr::all_of(c(target_col, feature_cols))) %>% 
-      dplyr::filter(dplyr::if_all(dplyr::everything(), ~ !is.na(.)))
-    
-    test_use <- df %>% 
-      dplyr::filter(.refit_month == pred_month) %>% 
-      dplyr::select(dplyr::all_of(c(date_col, target_col, feature_cols)), .refit_month) %>%
-      dplyr::filter(dplyr::if_all(dplyr::all_of(feature_cols), ~ !is.na(.)))
-    
-    if (nrow(train_use) < min_obs || nrow(test_use) == 0) {
-      pred_list[[i]] <- NULL
-      next
-    }
-    
-    x_train <- as.matrix(train_use[, feature_cols, drop = FALSE])
-    y_train <- train_use[[target_col]]
-    x_test <- as.matrix(test_use[, feature_cols, drop = FALSE])
-    
-    L <- sapply(feature_cols, function(v) {
-      7 * abs(stats::cor(train_use[[v]], y_train, use = "complete.obs")) / 350
-    })
-    
-    set.seed(seed)
-    cvfit <- glmnet::cv.glmnet(
-      x = x_train,
-      y = y_train,
-      alpha = alpha,
-      nfolds = nfolds,
-      standardize = standardize
-    )
-    lambda <- cvfit$lambda.min
-    lambda_vec[i] <- lambda
-    seed <- seed + 1
-    
-    month_preds <- list()
-    idx <- 1L
-    
-    if ("glmnet" %in% method) {
-      preds <- as.numeric(stats::predict(cvfit, newx = x_test, s = lambda))
-      
-      pred_list[[idx]] <- tibble::tibble(
-        !!date_col := test_use[[date_col]],
-        refit_month = test_use$.refit_month,
-        method = "glmnet",
-        mu = NA,
-        lambda = lambda,
-        actual = test_use[[target_col]],
-        predicted = preds
-      )
-      idx <- idx + 1L
-    }
-    
-    if ("capnet" %in% method || "postcap" %in% method) {
-      for (mu_j in capnet_mu) {
-        fit_cap <- capnet::capnet(
-          X = x_train,
-          y = y_train,
-          L = L,
-          newx = x_test,
-          lambda = lambda,
-          alpha = alpha,
-          mu = mu_j
-        )
-        
-        if ("capnet" %in% method) {
-          preds <- as.numeric(stats::predict(fit_cap, newdata = x_test))
-          label <- ifelse(mu_j == 0, "Uncapped", "Capnet")
-          
-          month_preds[[idx]] <- tibble::tibble(
-            !!date_col := test_use[[date_col]],
-            refit_month = pred_month,
-            method = label,
-            mu = mu_j,
-            lambda = lambda,
-            actual = test_use[[target_col]],
-            predicted = preds
-          )
-          idx <- idx + 1L
-        }
-        
-        if ("postcap" %in% method & mu_j == 0) {
-          preds_postcap <- postcap_predict(fit_cap, x_test, L)
-          
-          month_preds[[idx]] <- tibble::tibble(
-            !!date_col := test_use[[date_col]],
-            refit_month = pred_month,
-            method = "Post-Fit Cap",
-            mu = mu_j,
-            lambda = lambda,
-            actual = test_use[[target_col]],
-            predicted = preds_postcap
-          )
-          idx <- idx + 1L
-        }
-      }
-    } 
-    
-    if ("capnet_walk" %in% method) {
-      for (mu_j in walk_mu) {
-        fit_walk <- capnet::walk_capnet(
-          X = x_train,
-          y = y_train,
-          L = L,
-          newx = x_test,
-          lambda = lambda,
-          alpha = alpha,
-          mu = mu_j
-        )
-      
-        month_preds[[idx]] <- tibble::tibble(
-          !!date_col := test_use[[date_col]],
-          refit_month = pred_month,
-          method = "Walk-forward Capnet",
-          mu = mu_j,
-          lambda = lambda,
-          actual = test_use[[target_col]],
-          predicted = fit_walk$predictions
-        )
-        idx <- idx + 1L
-      }
-    }
-    pred_list[[i]] <- dplyr::bind_rows(month_preds)
-  }
-  
-  predictions <- dplyr::bind_rows(pred_list) %>% 
-    dplyr::arrange(.data[[date_col]])
-  
-  metrics <- predictions %>% 
-    dplyr::group_by(method, mu) %>% 
-    dplyr::summarise(
-      rmse = sqrt(mean((actual - predicted)^2, na.rm = TRUE)),
-      mae = mean(abs(actual - predicted), na.rm = TRUE),
-      cor = stats::cor(actual, predicted, use = "complete.obs"),
-      .groups = "drop"
-    )
-  
-  lambda_table <- tibble::tibble(
-    refit_month = refit_months,
-    lambda = lambda_vec
-  ) %>%
-    dplyr::filter(!is.na(lambda))
-  
-  list(
-    predictions = predictions,
-    metrics = metrics,
-    feature_cols = feature_cols,
-    lambdas = lambda_table,
-    capnet_mu = capnet_mu,
-    walk_mu = walk_mu,
-    method = method
-  )
-}
-
-calc_oos_r2 <- function(pred_df) {
-
-  pred_df <- pred_df |>
-    arrange(X)
-
-  # expanding historical mean benchmark
-  pred_df$mean_benchmark <- c(NA, cummean(head(pred_df$actual, -1)))
-
-  pred_df <- pred_df |>
-    dplyr::filter(!is.na(mean_benchmark))
-
-  sse_model <- sum((pred_df$actual - pred_df$predicted)^2)
-  sse_bench <- sum((pred_df$actual - pred_df$mean_benchmark)^2)
-
-  r2_oos <- 1 - sse_model / sse_bench
-
-  return(r2_oos)
-}
-
-rolling_oos_r2 <- function(pred_df, window = 20) {
-
-  pred_df <- pred_df |>
-    arrange(X)
-
-  pred_df$mean_benchmark <- c(NA, cummean(head(pred_df$actual, -1)))
-
-  pred_df <- pred_df |>
-    filter(!is.na(mean_benchmark))
-
-  pred_df <- pred_df |>
-    mutate(
-      se_model = (actual - predicted)^2,
-      se_bench = (actual - mean_benchmark)^2
-    )
-
-  pred_df |>
-    mutate(
-      r2_roll = 1 - rollapply(se_model, window, sum, fill = NA, align = "right") /
-                     rollapply(se_bench, window, sum, fill = NA, align = "right")
-    )
-}
-```
-
-```{r}
-models <- rolling_elastic_net(
+```{r experiment}
+results <- rolling_enet(
   data,
   date_col = "X",
   target_col = "target",
@@ -314,7 +79,7 @@ models <- rolling_elastic_net(
 predictions <- list()
 methods <- c()
 mu_vals <- c()
-combos <- models$predictions %>% 
+combos <- results$predictions %>% 
   dplyr::distinct(method, mu) %>% 
   dplyr::arrange(method, mu)
 
@@ -322,18 +87,17 @@ for (i in seq_len(nrow(combos))) {
   m <- combos$method[i]
   mu_j <- combos$mu[i]
   
-  tmp <- models$predictions %>% 
+  tmp <- results$predictions %>% 
     dplyr::filter(method == m, mu == mu_j)
   
   predictions[[i]] <- tmp
   methods[i] <- m
   mu_vals[i] <- mu_j
-  
 }
 
 ```
 
-```{r}
+```{r fig.height = 6.5, fig.width = 10}
 selected_idx <- c(1, 2, 6)
 
 rolling_list <- lapply(selected_idx, function(i) {
@@ -342,7 +106,7 @@ rolling_list <- lapply(selected_idx, function(i) {
 
   df$spec <- paste0(
     methods[i],
-    ifelse(mu_vals[i] == 0, "", paste0(" (μ=", mu_vals[i], ")"))
+    ifelse(mu_vals[i] == 0, "", paste0(" (γ=", mu_vals[i], ")"))
   )
 
   df
@@ -350,8 +114,7 @@ rolling_list <- lapply(selected_idx, function(i) {
 
 plot_df <- dplyr::bind_rows(rolling_list) %>% 
   dplyr::mutate(X = as.Date(X))
-```
-```{r fig.height = 6.5, fig.width = 10}
+
 ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
   geom_line(linewidth = 0.8, alpha = 0.9) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
@@ -359,7 +122,7 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
   scale_color_manual(values = c(
     "Uncapped" = "steelblue",
     "Post-Fit Cap" = "firebrick",
-    "Walk-forward Capnet (μ=100)" = "darkolivegreen4"
+    "Walk-forward Capnet (γ=100)" = "darkolivegreen4"
   )) +
 
   # --- FIX DATE AXIS ---
@@ -373,15 +136,13 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
   ) + 
 
   labs(
-    title = "Rolling Out-of-Sample R²",
-    subtitle = "252-day rolling window",
     x = "Date",
     y = expression(R^2),
     color = "Model"
   ) +
 
   # --- WHITE BACKGROUND ---
-  theme_bw(base_size = 14) +
+  theme_bw(base_size = 16) +
 
   theme(
     legend.position = "top",
@@ -397,23 +158,27 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
 
 
 ```{r}
-print(calc_oos_r2(predictions[[1]]))
-print(calc_oos_r2(predictions[[2]]))
-print(calc_oos_r2(predictions[[3]]))
-print(calc_oos_r2(predictions[[4]]))
-print(calc_oos_r2(predictions[[5]]))
-print(calc_oos_r2(predictions[[6]]))
+summary_table <- lapply(1:6, function(i) {
+  tibble::tibble(
+    method = methods[i],
+    gamma = ifelse(mu_vals[i] == 0, NA_real_, mu_vals[i]),
+    oos_r2 = calc_oos_r2(predictions[[i]])
+  )
+}) |>
+  dplyr::bind_rows()
+
+print(summary_table)
 ```
 
-```{r}
+```{r runtime}
 start_glmnet <- Sys.time()
-models <- rolling_elastic_net(
+models <- rolling_enet(
   data,
   date_col = "X",
   target_col = "target",
   alpha = 0.5,
   window_years = 25,
-  method = "glmnet",
+  method = c("glmnet"),
   eval_start = "2020-01-01"
 )
 end_glmnet <- Sys.time()
@@ -422,14 +187,13 @@ time_glmnet <- end_glmnet - start_glmnet
 sprintf("Backtest runtime for glmnet: %.2f seconds", time_glmnet)
 
 start_capnet <- Sys.time()
-models <- rolling_elastic_net(
+models <- rolling_enet(
   data,
   date_col = "X",
   target_col = "target",
   alpha = 0.5,
   window_years = 25,
-  method = "capnet",
-  mu_values = c(0),
+  method = c("capnet"),
   eval_start = "2020-01-01"
 )
 end_capnet <- Sys.time()
@@ -437,14 +201,14 @@ time_capnet <- end_capnet - start_capnet
 sprintf("Backtest runtime for capnet: %.2f seconds", time_capnet)
 
 start_capnet_walk <- Sys.time()
-models <- rolling_elastic_net(
+models <- rolling_enet(
   data,
   date_col = "X",
   target_col = "target",
   alpha = 0.5,
   window_years = 25,
-  method = "capnet_walk",
-  mu_values = c(0),
+  method = c("capnet_walk"),
+  walk_mu = c(0.1),
   eval_start = "2020-01-01"
 )
 end_capnet_walk <- Sys.time()
