@@ -13,7 +13,7 @@
     a0_raw <- 0
   }
 
-  contributions <- sweep(sweep(cap$newx, 2, beta_raw, "*"), 1, cap$multiplier, "*")
+  contributions <- sweep(cap$newx, 2, beta_raw, "*")
   
   structure(list(
     a0 = a0_raw,
