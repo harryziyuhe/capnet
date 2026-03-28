@@ -9,7 +9,7 @@
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
 #'  features and rows are observations.
 #' @param y Numeric response vector of length \eqn{n}.
-#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty
+#' @param gamma Nonnegative numeric scalar; strength of the contribution-cap penalty
 #' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
 #'  contribution ceiling(s). If scalar, the same ceiling is applied to all
 #'  coefficients
@@ -43,7 +43,7 @@
 #' @return An object of class \code{"cv_capnet"} with components:
 #'  \item{\code{alpha}}{Numeric vector of alpha values searched.}
 #'  \item{\code{lambda}}{Numeric vector of lambda values searched.}
-#'  \item{\code{mu}}{mu value passed in input.}
+#'  \item{\code{gamma}}{gamma value passed in input.}
 #'  \item{\code{L}}{L value passed in input.}
 #'  \item{\code{metric}}{Metric used to evaluate performance.}
 #'  \item{\code{splits}}{Cross-validation splits.}
@@ -79,14 +79,14 @@
 #'   X <- matrix(rnorm(n * p), n, p)
 #'   beta <- c(1.2, 0.7, 0.5, rep(0, p - 3))
 #'   y <- as.numeric(X %*% beta + rnorm(n))
-#'   cv <- cv_capnet(X, y, mu = 1, L = 1.5)
+#'   cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
 #'   cv$best_alpha; cv$best_lambda; cv$best_error
 #' }
 #' 
 #' @export
 
 cv_capnet <- function(X, y,
-                      mu, L,
+                      gamma, L,
                       family = "gaussian",
                       lambda = exp(seq(1, -5, length.out = 50)),
                       alpha = seq(0, 1, length.out = 5),
@@ -168,7 +168,7 @@ cv_capnet <- function(X, y,
         train_run <- train_fold
         train_run$par <- par0
         
-        params <- list(alpha = alpha[a], lambda = lambda[l], mu = mu)
+        params <- list(alpha = alpha[a], lambda = lambda[l], gamma = gamma)
         
         fit <- tryCatch(
           .capnet_fit(train_run, cap_fold, params),
@@ -206,7 +206,7 @@ cv_capnet <- function(X, y,
   structure(list(
     alpha = alpha,
     lambda = lambda,
-    mu = mu,
+    gamma = gamma,
     L = L,
     metric = metric,
     splits = splits,

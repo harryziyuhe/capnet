@@ -29,7 +29,7 @@
 #'  penalty. 
 #' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
 #'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
-#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty
+#' @param gamma Nonnegative numeric scalar; strength of the contribution-cap penalty
 #' @param lower.limits Optional numeric scalar or length-\eqn{p} vector of lower
 #'  bounds on coefficients. Initial values must satisfy the bounds.
 #' @param upper.limits Optional numeric scalar or length-\eqn{p} vector of upper
@@ -56,7 +56,7 @@
 #'    (present if \code{convergence != 0})}
 #'  \item{\code{alpha}}{alpha value passed in input.}
 #'  \item{\code{lambda}}{lambda value passed in input.}
-#'  \item{\code{mu}}{mu value passed in input.}
+#'  \item{\code{gamma}}{gamma value passed in input.}
 #'  \item{\code{L}}{L value passed in input.}
 #'  \item{\code{multiplier}}{multiplier value passed in input.}
 #'  \item{\code{family}}{model family passed in input.}
@@ -81,10 +81,10 @@
 #' X <- matrix(rnorm(n * p), n, p)
 #' beta <- c(2, 1.5, rep(0, p-2))
 #' y <- X %*% beta + rnorm(n)
-#' fit1 <- capnet(X, as.numeric(y), lambda = 0.1, alpha = 0.5, mu = 1, L = 2)
+#' fit1 <- capnet(X, as.numeric(y), lambda = 0.1, alpha = 0.5, gamma = 1, L = 2)
 #' 
 #' # Box constraints
-#' fit2 <- capnet(X, as.numeric(y), lambda = 0.1, alpha = 0.5, mu = 1, L = 2, lower.limits = 0)
+#' fit2 <- capnet(X, as.numeric(y), lambda = 0.1, alpha = 0.5, gamma = 1, L = 2, lower.limits = 0)
 #' 
 #' @export
 
@@ -98,7 +98,7 @@ capnet <- function(X, y, L,
                    multiplier = 1,
                    lambda = 0,
                    alpha = 0,
-                   mu = 0,
+                   gamma = 0,
                    lower.limits = NULL,
                    upper.limits = NULL,
                    tol = 1e-8,
@@ -130,7 +130,7 @@ capnet <- function(X, y, L,
   train <- .capnet_standardize_train(spec)
   cap <- .capnet_cap_context(spec)
   
-  params <- list(alpha = alpha, lambda = lambda, mu = mu)
+  params <- list(alpha = alpha, lambda = lambda, gamma = gamma)
   
   fit <- .capnet_fit(train, cap, params)
   

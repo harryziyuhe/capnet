@@ -14,7 +14,7 @@
 #' @param alpha Numeric scalar in \eqn{[0,1]} (default \code{0.5}); the 
 #'  elastic-net mixing parameter. \code{alpha = 1} is Lasso, \code{alpha=0} is 
 #'  Ridge. 
-#' @param mu Nonnegative numeric scalar; strength of the contribution-cap 
+#' @param gamma Nonnegative numeric scalar; strength of the contribution-cap 
 #' penalty (default \code{1}).
 #' @param ... Additional arguments forwarded to \code{capnet()}, e.g.,
 #'  \code{newx}, \code{par}, \code{multiplier}, \code{intercept},
@@ -26,7 +26,7 @@
 #'  
 #' @details
 #' For each \code{lambda} in the supplied vector, \code{capnet()} is fit with
-#' fixed \code{alpha}, \code{mu}, and \code{L}, and the resulting coefficients
+#' fixed \code{alpha}, \code{gamma}, and \code{L}, and the resulting coefficients
 #' are collected. If feature names are available from \code{colnames(X)}, they
 #' are used as column names.
 #' 
@@ -40,13 +40,13 @@
 #' beta <- c(1.5, 0.8, 0.2, rep(0, p - 3))
 #' y <- as.numeric(X %*% beta + rnorm(n))
 #' path <- coef_path(X, y, L = 0.5, alpha = 0.5,
-#'                   lambda = exp(seq(1, -5, length.out = 50)), mu = 1)
+#'                   lambda = exp(seq(1, -5, length.out = 50)), gamma = 1)
 #' @export
 
 coef_path <- function(X, y, L,
                       lambda = exp(seq(1, -5, length.out = 50)), 
                       alpha = 0.5, 
-                      mu = 1,
+                      gamma = 1,
                       ...) {
   # Stop if there is any NA value in data
   if (anyNA(X) || anyNA(y)) {
@@ -59,39 +59,39 @@ coef_path <- function(X, y, L,
     if (length(alpha) != 1) {
       stop("alpha must be a constant value when evaluating along lambda path")
     }
-    if (length(mu) != 1) {
-      stop("mu must be a constant value when evaluating along lambda path")
+    if (length(gamma) != 1) {
+      stop("gamma must be a constant value when evaluating along lambda path")
     }
     param = log(lambda)
     path = "lambda (log)"
     alpha = rep(alpha, length(lambda))
-    mu = rep(mu, length(lambda))
-  } else if (length(mu) > 1) {
+    gamma = rep(gamma, length(lambda))
+  } else if (length(gamma) > 1) {
     if (length(alpha) != 1) {
-      stop("alpha must be a constant value when evaluating along mu path")
+      stop("alpha must be a constant value when evaluating along gamma path")
     }
-    param = log(mu)
-    path = "mu (log)"
-    lambda = rep(lambda, length(mu))
-    alpha = rep(alpha, length(mu))
+    param = log(gamma)
+    path = "gamma (log)"
+    lambda = rep(lambda, length(gamma))
+    alpha = rep(alpha, length(gamma))
   } else if (length(alpha) > 1) {
     param = alpha
     path = "alpha"
     lambda = rep(lambda, length(alpha))
-    mu = rep(mu, length(alpha))
+    gamma = rep(gamma, length(alpha))
   } else {
-    stop("at least one of lambda, alpha, and mu must have length more than 1")
+    stop("at least one of lambda, alpha, and gamma must have length more than 1")
   }
   
   for (i in seq_along(lambda)) {
     l = lambda[i]
     a = alpha[i]
-    m = mu[i]
+    g = gamma[i]
     capnet_results <- capnet(X,
                              y,
                              lambda = l,
                              alpha = a,
-                             mu = m,
+                             gamma = g,
                              L = L,
                              standardize = FALSE,
                              ...)

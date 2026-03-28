@@ -42,7 +42,7 @@
 #' X <- matrix(rnorm(n * p), n, p)
 #' beta <- c(2, 1.5, rep(0, p-2))
 #' y <- X %*% beta + rnorm(n)
-#' fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, mu = 1, L = 1)
+#' fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
 #' capnet_violations(fit)
 #' 
 #' @export

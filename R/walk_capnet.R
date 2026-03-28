@@ -30,9 +30,9 @@
 #' @param lambda Nonnegative numeric scalar; overall strength of the elastic net penalty. 
 #' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
 #'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
-#' @param mu Nonnegative numeric scalar; strength of the contribution-cap penalty.
-#' @param max_mu_tries Optional numeric scalar; maximum number of tries of different 
-#'  mu values for convergence. See \link[=walk_capnet]{Details}.
+#' @param gamma Nonnegative numeric scalar; strength of the contribution-cap penalty.
+#' @param max_gamma_tries Optional numeric scalar; maximum number of tries of different 
+#'  gamma values for convergence. See \link[=walk_capnet]{Details}.
 #' @param ... Additional arguments used in fitting. See [capnet()] for more details.
 #' 
 #' @return An object of class \code{"walk_capnet"} with components:
@@ -45,8 +45,8 @@
 #'    stacked across all evaluation rows in order of prediction.}
 #'  \item{\code{predictions}}{Numeric matrix of out-of-sample predictions for 
 #'    the evaluation rows; shape \eqn{S\times p}.}
-#'  \item{\code{mus}}{Numeric vector of length \eqn{n_\mathrm{new}} for the 
-#'    \code{mu} used at each step.}
+#'  \item{\code{gammas}}{Numeric vector of length \eqn{n_\mathrm{new}} for the 
+#'    \code{gamma} used at each step.}
 #' 
 #' @details
 #' Given the evaluation matrix \code{newx} of size \eqn{S\times p}. At step 
@@ -64,7 +64,7 @@
 #' newx <- matrix(rnorm(n_new * p), n_new, p)
 #' beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
 #' y <- as.numeric(X %*% beta + rnorm(n))
-#' out <- walk_capnet(X, y, lambda = 0.1, alpha = 0.5, mu = 1, L = 0.5, newx = newx, walk = 1)
+#' out <- walk_capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 0.5, newx = newx, walk = 1)
 #' 
 #' @export
 
@@ -76,8 +76,8 @@ walk_capnet <- function(X, y, L, newx,
                         walk = 1,
                         lambda = 0,
                         alpha = 0,
-                        mu = 0,
-                        max_mu_tries = 6,
+                        gamma = 0,
+                        max_gamma_tries = 6,
                         ...) {
   
   # Stop if there is any NA values in data
@@ -101,7 +101,7 @@ walk_capnet <- function(X, y, L, newx,
   
   intercepts <- numeric(m)
   predictions <- numeric(m)
-  mu_values <- numeric(m)
+  gamma_values <- numeric(m)
   
   betas <- matrix(NA_real_, nrow = m, ncol = p)
   contributions <- matrix(NA_real_, nrow = m, ncol = p)
@@ -116,10 +116,10 @@ walk_capnet <- function(X, y, L, newx,
     
     cap <- .capnet_cap_context(spec, idx_cap = idx_cap)
     
-    mu_try <- mu
+    gamma_try <- gamma
     fit <- NULL
-    for (k in seq_len(max_mu_tries)) {
-      params <- list(alpha = alpha, lambda = lambda, mu = mu_try)
+    for (k in seq_len(max_gamma_tries)) {
+      params <- list(alpha = alpha, lambda = lambda, gamma = gamma_try)
       
       fit_k <- tryCatch(
         .capnet_fit(train, cap, params),
@@ -131,7 +131,7 @@ walk_capnet <- function(X, y, L, newx,
         break
       }
       
-      mu_try <- mu_try / 10
+      gamma_try <- gamma_try / 10
     }
     
     if (is.null(fit)) {
@@ -141,14 +141,14 @@ walk_capnet <- function(X, y, L, newx,
       ))
       intercepts[idx_cap] <- NA_real_
       predictions[idx_cap] <- NA_real_
-      mu_values[idx_cap] <- NA_real_
+      gamma_values[idx_cap] <- NA_real_
       next
     }
     
     model <- .capnet_output(train, cap, fit, params)
     
     intercepts[idx_cap] <- model$a0
-    mu_values[idx_cap] <- mu_try
+    gamma_values[idx_cap] <- gamma_try
     betas[idx_cap, ] <- matrix(rep(model$beta, m), nrow = m, byrow = TRUE)
     contributions[idx_cap, ] <- model$feature_contributions
     predictions[idx_cap] <- rowSums(model$feature_contributions) + model$a0
@@ -161,21 +161,21 @@ walk_capnet <- function(X, y, L, newx,
     betas <- xts::as.xts(betas, order.by = ord)
     contributions <- xts::as.xts(contributions, order.by = ord)
     predictions <- xts::as.xts(predictions, order.by = ord)
-    mu_values <- xts::as.xts(mu_values, order.by = ord)
+    gamma_values <- xts::as.xts(gamma_values, order.by = ord)
     
     colnames(intercepts) <- "intercept"
     colnames(betas) <- colnames(contributions) <- colnames(X)
     colnames(predictions) <- "prediction"
-    colnames(mu_values) <- "mu"
+    colnames(gamma_values) <- "gamma"
   } else {
     intercepts <- matrix(intercepts, ncol = 1)
     predictions <- matrix(predictions, ncol = 1)
-    mu_values <- matrix(mu_values, ncol = 1)
+    gamma_values <- matrix(gamma_values, ncol = 1)
     
     colnames(intercepts) <- "intercept"
     colnames(betas) <- colnames(contributions) <- colnames(X)
     colnames(predictions) <- "prediction"
-    colnames(mu_values) <- "mu"
+    colnames(gamma_values) <- "gamma"
   }
   
   structure(list(
@@ -183,7 +183,7 @@ walk_capnet <- function(X, y, L, newx,
     betas = betas,
     feature_contributions = contributions,
     predictions = predictions,
-    mus = mu_values,
+    gammas = gamma_values,
     call = match.call()
   ), class = "walk_capnet")
 }

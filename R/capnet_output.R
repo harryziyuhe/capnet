@@ -27,7 +27,7 @@
     message = fit$message,
     alpha = params$alpha,
     lambda = params$lambda,
-    mu = params$mu,
+    gamma = params$gamma,
     family = train$family,
     intercept = train$intercept,
     standardize = train$standardize,

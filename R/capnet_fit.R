@@ -8,7 +8,7 @@
   
   alpha <- params$alpha
   lambda <- params$lambda
-  mu <- params$mu
+  gamma <- params$gamma
   
   newx <- cap$newx
   multiplier <- cap$multiplier
@@ -49,7 +49,7 @@
     excess_penalty <- sum(excess_contribution ^ 2) / m
     
     # Total loss (smooth components)
-    total <- ll + params$lambda * ridge_penalty + params$mu * excess_penalty
+    total <- ll + params$lambda * ridge_penalty + params$gamma * excess_penalty
     
     return(total)
   }
@@ -83,7 +83,7 @@
       1, cap$multiplier, "/"
     )
     d_excess <- excess_contribution * sign(feature_contribution) * cap$newx
-    gradient_cap <- (2 * params$mu / m) * colSums(d_excess)
+    gradient_cap <- (2 * params$gamma / m) * colSums(d_excess)
 
     gradient_rest <- gradient_rest + gradient_cap
     

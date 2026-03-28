@@ -154,7 +154,7 @@
 
 
 # Preparing input for capnet fit
-.capnet_prepare <- function(X, y, lambda, alpha, mu, L, newx = NULL,
+.capnet_prepare <- function(X, y, lambda, alpha, gamma, L, newx = NULL,
                             par = NULL, multiplier = 1, 
                             family = NULL, intercept = TRUE, standardize = TRUE,
                             lower.limits = NULL, upper.limits = NULL,
@@ -233,7 +233,7 @@
     y_center = y_center,
     lambda = lambda,
     alpha = alpha,
-    mu = mu,
+    gamma = gamma,
     L = L,
     newx = newx,
     par = par,
