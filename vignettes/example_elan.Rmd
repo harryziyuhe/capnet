@@ -97,7 +97,7 @@ for (i in seq_len(nrow(combos))) {
 
 ```
 
-```{r fig.height = 6.5, fig.width = 10}
+```{r fig.height = 6.5, fig.width = 10, echo = FALSE}
 selected_idx <- c(1, 2, 6)
 
 rolling_list <- lapply(selected_idx, function(i) {
@@ -157,7 +157,7 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
 ```
 
 
-```{r}
+```{r summary, echo = FALSE}
 summary_table <- lapply(1:6, function(i) {
   tibble::tibble(
     method = methods[i],
@@ -170,7 +170,7 @@ summary_table <- lapply(1:6, function(i) {
 print(summary_table)
 ```
 
-```{r runtime}
+```{r runtime, echo = FALSE}
 start_glmnet <- Sys.time()
 models <- rolling_enet(
   data,
