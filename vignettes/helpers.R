@@ -55,9 +55,8 @@ moments_latex <- function(data, digits = 3) {
   )
 }
 
-postcap_predict <- function(object, newx, L) {
+postcap_contrib <- function(object, newx, L) {
   beta <- as.numeric(object$beta)
-  a0 <- if (!is.null(object$a0)) as.numeric(object$a0) else 0
   
   contrib <- sweep(newx, 2, beta, `*`)
   
@@ -71,7 +70,28 @@ postcap_predict <- function(object, newx, L) {
     contrib_capped <- pmax(pmin(contrib, L_mat), -L_mat)
   }
   
-  as.numeric(a0 + rowSums(contrib_capped))
+  contrib_capped
+}
+
+make_contrib_tibble <- function(contrib,
+                                test_use,
+                                date_col,
+                                pred_month,
+                                method,
+                                gamma,
+                                lambda,
+                                feature_cols) {
+  contrib_df <- as.data.frame(contrib)
+  names(contrib_df) <- feature_cols
+  
+  tibble::tibble(
+    !!date_col := test_use[[date_col]],
+    refit_month = pred_month,
+    method = method,
+    gamma = gamma,
+    lambda = lambda
+  ) %>%
+    dplyr::bind_cols(tibble::as_tibble(contrib_df))
 }
 
 rolling_enet <- function(df,
@@ -82,8 +102,8 @@ rolling_enet <- function(df,
                          nfolds = 10,
                          standardize = TRUE,
                          method = c("capnet_walk", "capnet", "glmnet", "postcap"),
-                         capnet_mu = c(0),
-                         walk_mu = c(0.1, 1, 10, 100),
+                         capnet_gamma = c(0),
+                         walk_gamma = c(0.1, 1, 10, 100),
                          min_obs = 100,
                          eval_start = "2020-01-01",
                          seed = 42) {
@@ -110,6 +130,7 @@ rolling_enet <- function(df,
   refit_months <- refit_months[refit_months >= lubridate::floor_date(eval_start, "month")]
   
   pred_list <- vector("list", length(refit_months))
+  contrib_list <- vector("list", length(refit_months))
   lambda_vec <- rep(NA_real_, length(refit_months))
   
   for (i in seq_along(refit_months)) {
@@ -153,25 +174,41 @@ rolling_enet <- function(df,
     seed <- seed + 1
     
     month_preds <- list()
+    month_contribs <- list()
     idx <- 1L
     
     if ("glmnet" %in% method) {
       preds <- as.numeric(stats::predict(cvfit, newx = x_test, s = lambda))
       
-      pred_list[[idx]] <- tibble::tibble(
+      beta <- as.numeric(glmnet::coef.glmnet(cvfit$glmnet.fit, s = lambda))[-1]
+      contrib <- sweep(x_test, 2, beta, `*`)
+      
+      month_preds[[idx]] <- tibble::tibble(
         !!date_col := test_use[[date_col]],
         refit_month = test_use$.refit_month,
         method = "glmnet",
-        mu = NA,
+        gamma = NA,
         lambda = lambda,
         actual = test_use[[target_col]],
         predicted = preds
       )
+      
+      month_contribs[[idx]] <- make_contrib_tibble(
+        contrib = contrib,
+        test_use = test_use,
+        date_col = date_col,
+        pred_month = pred_month,
+        method = "glmnet",
+        gamma = NA,
+        lambda = lambda,
+        feature_cols = feature_cols
+      )
+      
       idx <- idx + 1L
     }
     
     if ("capnet" %in% method || "postcap" %in% method) {
-      for (mu_j in capnet_mu) {
+      for (gamma_j in capnet_gamma) {
         fit_cap <- capnet::capnet(
           X = x_train,
           y = y_train,
@@ -179,44 +216,73 @@ rolling_enet <- function(df,
           newx = x_test,
           lambda = lambda,
           alpha = alpha,
-          mu = mu_j
+          gamma = gamma_j
         )
         
         if ("capnet" %in% method) {
           preds <- as.numeric(stats::predict(fit_cap, newdata = x_test))
-          label <- ifelse(mu_j == 0, "Uncapped", "Capnet")
+          label <- ifelse(gamma_j == 0, "Uncapped", "Capnet")
+          
+          beta <- as.numeric(fit_cap$beta)
+          contrib <- sweep(x_test, 2, beta, "*")
           
           month_preds[[idx]] <- tibble::tibble(
             !!date_col := test_use[[date_col]],
             refit_month = pred_month,
             method = label,
-            mu = mu_j,
+            gamma = gamma_j,
             lambda = lambda,
             actual = test_use[[target_col]],
             predicted = preds
           )
+          
+          month_contribs[[idx]] <- make_contrib_tibble(
+            contrib = contrib,
+            test_use = test_use,
+            date_col = date_col,
+            pred_month = pred_month,
+            method = label,
+            gamma = gamma_j,
+            lambda = lambda,
+            feature_cols = feature_cols
+          )
+          
           idx <- idx + 1L
         }
         
-        if ("postcap" %in% method & mu_j == 0) {
-          preds_postcap <- postcap_predict(fit_cap, x_test, L)
+        if ("postcap" %in% method & gamma_j == 0) {
+          a0 <- if (!is.null(fit_cap$a0)) as.numeric(fit_cap$a0) else 0
+          contrib <- postcap_contrib(fit_cap, x_test, L)
+          preds_postcap <- a0 + rowSums(contrib)
           
           month_preds[[idx]] <- tibble::tibble(
             !!date_col := test_use[[date_col]],
             refit_month = pred_month,
             method = "Post-Fit Cap",
-            mu = mu_j,
+            gamma = gamma_j,
             lambda = lambda,
             actual = test_use[[target_col]],
             predicted = preds_postcap
           )
+          
+          month_contribs[[idx]] <- make_contrib_tibble(
+            contrib = contrib,
+            test_use = test_use,
+            date_col = date_col,
+            pred_month = pred_month,
+            method = "Post-Fit Cap",
+            gamma = gamma_j,
+            lambda = lambda,
+            feature_cols = feature_cols
+          )
+          
           idx <- idx + 1L
         }
       }
     } 
     
     if ("capnet_walk" %in% method) {
-      for (mu_j in walk_mu) {
+      for (gamma_j in walk_gamma) {
         fit_walk <- capnet::walk_capnet(
           X = x_train,
           y = y_train,
@@ -224,29 +290,47 @@ rolling_enet <- function(df,
           newx = x_test,
           lambda = lambda,
           alpha = alpha,
-          mu = mu_j
+          gamma = gamma_j
         )
         
         month_preds[[idx]] <- tibble::tibble(
           !!date_col := test_use[[date_col]],
           refit_month = pred_month,
           method = "Walk-forward Capnet",
-          mu = mu_j,
+          gamma = gamma_j,
           lambda = lambda,
           actual = test_use[[target_col]],
           predicted = fit_walk$predictions
         )
+        
+        contrib <- fit_walk$feature_contributions
+        
+        month_contribs[[idx]] <- make_contrib_tibble(
+          contrib = contrib,
+          test_use = test_use,
+          date_col = date_col,
+          pred_month = pred_month,
+          method = "Walk-forward Capnet",
+          gamma = gamma_j,
+          lambda = lambda,
+          feature_cols = feature_cols
+        )
+        
         idx <- idx + 1L
       }
     }
     pred_list[[i]] <- dplyr::bind_rows(month_preds)
+    contrib_list[[i]] <- dplyr::bind_rows(month_contribs)
   }
   
   predictions <- dplyr::bind_rows(pred_list) %>% 
     dplyr::arrange(.data[[date_col]])
   
+  contributions <- dplyr::bind_rows(contrib_list) %>%
+    dplyr::arrange(.data[[date_col]])
+  
   metrics <- predictions %>% 
-    dplyr::group_by(method, mu) %>% 
+    dplyr::group_by(method, gamma) %>% 
     dplyr::summarise(
       rmse = sqrt(mean((actual - predicted)^2, na.rm = TRUE)),
       mae = mean(abs(actual - predicted), na.rm = TRUE),
@@ -262,11 +346,12 @@ rolling_enet <- function(df,
   
   list(
     predictions = predictions,
+    contributions = contributions,
     metrics = metrics,
     feature_cols = feature_cols,
     lambdas = lambda_table,
-    capnet_mu = capnet_mu,
-    walk_mu = walk_mu,
+    capnet_gamma = capnet_gamma,
+    walk_gamma = walk_gamma,
     method = method
   )
 }
