@@ -53,7 +53,7 @@ if (length(missing) == 0) {
 ```{r data, result="asis"}
 data <- read.csv(system.file("extdata", "data.csv", package = "capnet"))
 vars_to_keep <- c("X", "target", "S2", "E2", "E3", "P9", "S1", "S5", "I2", "P8", 
-                  "P10", "P12", "P13", "U1", "U2")
+                  "P10", "P12", "P13")
 data <- data |> 
   mutate(
     `U1` = `I1`-`I2`,
@@ -77,28 +77,45 @@ results <- rolling_enet(
 )
 
 predictions <- list()
+contributions <- list()
 methods <- c()
-mu_vals <- c()
+gamma_vals <- c()
 combos <- results$predictions %>% 
-  dplyr::distinct(method, mu) %>% 
-  dplyr::arrange(method, mu)
+  dplyr::distinct(method, gamma) %>% 
+  dplyr::arrange(method, gamma)
 
 for (i in seq_len(nrow(combos))) {
   m <- combos$method[i]
-  mu_j <- combos$mu[i]
+  gamma_j <- combos$gamma[i]
   
-  tmp <- results$predictions %>% 
-    dplyr::filter(method == m, mu == mu_j)
+  pred_tmp <- results$predictions %>% 
+    dplyr::filter(method == m, gamma == gamma_j)
+  contrib_tmp <- results$contributions %>% 
+    dplyr::filter(method == m, gamma == gamma_j)
   
-  predictions[[i]] <- tmp
+  predictions[[i]] <- pred_tmp
+  contributions[[i]] <- contrib_tmp
   methods[i] <- m
-  mu_vals[i] <- mu_j
+  gamma_vals[i] <- gamma_j
 }
 
 ```
 
+```{r summary, echo = FALSE}
+summary_table <- lapply(1:6, function(i) {
+  tibble::tibble(
+    method = methods[i],
+    gamma = ifelse(gamma_vals[i] == 0, NA_real_, gamma_vals[i]),
+    oos_r2 = calc_oos_r2(predictions[[i]])
+  )
+}) |>
+  dplyr::bind_rows()
+
+print(summary_table)
+```
+
 ```{r fig.height = 6.5, fig.width = 10, echo = FALSE}
-selected_idx <- c(1, 2, 6)
+selected_idx <- c(1, 2, 3)
 
 rolling_list <- lapply(selected_idx, function(i) {
   df <- rolling_oos_r2(predictions[[i]], window = 252) |>
@@ -106,7 +123,7 @@ rolling_list <- lapply(selected_idx, function(i) {
 
   df$spec <- paste0(
     methods[i],
-    ifelse(mu_vals[i] == 0, "", paste0(" (γ=", mu_vals[i], ")"))
+    ifelse(gamma_vals[i] == 0, "", paste0(" (γ=", gamma_vals[i], ")"))
   )
 
   df
@@ -122,7 +139,7 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
   scale_color_manual(values = c(
     "Uncapped" = "steelblue",
     "Post-Fit Cap" = "firebrick",
-    "Walk-forward Capnet (γ=100)" = "darkolivegreen4"
+    "Walk-forward Capnet (γ=0.1)" = "darkolivegreen4"
   )) +
 
   # --- FIX DATE AXIS ---
@@ -156,19 +173,102 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
   )
 ```
 
+```{r fig.height = 6.5, fig.width = 10, echo = FALSE}
+selected_idx <- c(1, 2, 3)
+ref <- contributions[[1]]
+max_col_idx <- max.col(abs(ref[,6:16]), ties.method = "first")
 
-```{r summary, echo = FALSE}
-summary_table <- lapply(1:6, function(i) {
-  tibble::tibble(
-    method = methods[i],
-    gamma = ifelse(mu_vals[i] == 0, NA_real_, mu_vals[i]),
-    oos_r2 = calc_oos_r2(predictions[[i]])
+max_contributions <- lapply(selected_idx, function(i) {
+  df <- contributions[[i]]
+  mat <- as.matrix(df)
+  max_col <- as.numeric(mat[cbind(seq_len(nrow(mat)), max_col_idx + 5)])
+  df <- df[,1:5]
+  df$max_col <- max_col
+  df$spec <- paste0(
+    methods[i],
+    ifelse(gamma_vals[i] == 0, "", paste0(" (γ=", gamma_vals[i], ")"))
   )
-}) |>
-  dplyr::bind_rows()
+  df
+})
 
-print(summary_table)
+plot_df <- dplyr::bind_rows(max_contributions) %>% 
+  dplyr::mutate(X = as.Date(X))
+
+ggplot(plot_df, aes(x = X, y = max_col, color = spec, group = spec)) +
+  geom_line(linewidth = 0.8, alpha = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+
+  scale_color_manual(values = c(
+    "Uncapped" = "steelblue",
+    "Post-Fit Cap" = "firebrick",
+    "Walk-forward Capnet (γ=0.1)" = "darkolivegreen4"
+  )) +
+
+  # --- FIX DATE AXIS ---
+  scale_x_date(
+    breaks = seq(
+      from = as.Date("2020-01-01"),
+      to   = max(plot_df$X),
+      by   = "6 months"
+    ),
+    date_labels = "%Y-%m"
+  ) + 
+
+  labs(
+    x = "Date",
+    y = expression(R^2),
+    color = "Model"
+  ) +
+
+  # --- WHITE BACKGROUND ---
+  theme_bw(base_size = 16) +
+
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(color = "gray40"),
+    
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),   # cleaner time axis
+    axis.text.x = element_text(angle = 0)
+  )
 ```
+
+```{r, include = FALSE}
+make_feature_table <- function(df_list, target_x, df_names = NULL,
+                               feature_cols = c("S2", "E2", "E3", "P9", "S1",
+                                                "S5", "I2", "P8", "P10", "P12", "P13")) {
+  if (is.null(df_names)) {
+    df_names <- paste0("df", seq_along(df_list))
+  }
+
+  long_list <- lapply(seq_along(df_list), function(i) {
+    df_list[[i]] %>%
+      dplyr::filter(X == target_x) %>%
+      dplyr::select(dplyr::all_of(feature_cols)) %>%
+      tidyr::pivot_longer(
+        cols = dplyr::everything(),
+        names_to = "feature",
+        values_to = df_names[i]
+      )
+  })
+
+  out <- Reduce(function(x, y) dplyr::left_join(x, y, by = "feature"), long_list)
+  as.data.frame(out)
+}
+```
+
+```{r contrib_table, result="asis"}
+tab <- make_feature_table(
+  df_list = contributions[c(1,2,3)],
+  target_x = "2023-05-24",
+  df_names = c("Post-Fit Cap", "Uncapped", "Walk-forward Capnet")
+)
+
+print(tab)
+```
+
 
 ```{r runtime, echo = FALSE}
 start_glmnet <- Sys.time()
@@ -208,11 +308,11 @@ models <- rolling_enet(
   alpha = 0.5,
   window_years = 25,
   method = c("capnet_walk"),
-  walk_mu = c(0.1),
+  walk_gamma = c(0.1),
   eval_start = "2020-01-01"
 )
 end_capnet_walk <- Sys.time()
-time_capnet_walk <- end_capnet_walk - start_capnet_walk
+time_capnet_walk <- difftime(end_capnet_walk, start_capnet_walk, units = "secs")
 sprintf("Backtest runtime for walk-forward capnet: %.2f seconds", time_capnet_walk)
 ```
 
