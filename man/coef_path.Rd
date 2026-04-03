@@ -10,7 +10,7 @@ coef_path(
   L,
   lambda = exp(seq(1, -5, length.out = 50)),
   alpha = 0.5,
-  mu = 1,
+  gamma = 1,
   ...
 )
 }
@@ -30,7 +30,7 @@ of nonnegative elastic-net penalties to trace.}
 elastic-net mixing parameter. \code{alpha = 1} is Lasso, \code{alpha=0} is
 Ridge.}
 
-\item{mu}{Nonnegative numeric scalar; strength of the contribution-cap
+\item{gamma}{Nonnegative numeric scalar; strength of the contribution-cap
 penalty (default \code{1}).}
 
 \item{...}{Additional arguments forwarded to \code{capnet()}, e.g.,
@@ -49,7 +49,7 @@ inspecting coefficient shrinkage and entry/exit as regularization increases.
 }
 \details{
 For each \code{lambda} in the supplied vector, \code{capnet()} is fit with
-fixed \code{alpha}, \code{mu}, and \code{L}, and the resulting coefficients
+fixed \code{alpha}, \code{gamma}, and \code{L}, and the resulting coefficients
 are collected. If feature names are available from \code{colnames(X)}, they
 are used as column names.
 }
@@ -61,7 +61,7 @@ colnames(X) <- paste0("x", 1:p)
 beta <- c(1.5, 0.8, 0.2, rep(0, p - 3))
 y <- as.numeric(X \%*\% beta + rnorm(n))
 path <- coef_path(X, y, L = 0.5, alpha = 0.5,
-                  lambda = exp(seq(1, -5, length.out = 50)), mu = 1)
+                  lambda = exp(seq(1, -5, length.out = 50)), gamma = 1)
 }
 \seealso{
 \code{\link[=capnet]{capnet()}}, \code{\link[=plot.capnet_path]{plot.capnet_path()}}

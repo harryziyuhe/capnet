@@ -15,7 +15,7 @@ plot_redistribution(
 }
 \arguments{
 \item{uncapped}{An object returned by \code{capnet()} fit without a
-contribution cap(i.e., \code{mu = 0} or large \code{L}).}
+contribution cap(i.e., \code{gamma = 0} or large \code{L}).}
 
 \item{capped}{An object returned by \code{capnet()} fit with contribution
 caps applied.}
@@ -64,8 +64,8 @@ n <- 40; p <- 6
 X <- matrix(rnorm(n * p), n, p)
 beta <- c(1.5, 0.8, 0.2, rep(0, p - 3))
 y <- as.numeric(X \%*\% beta + rnorm(n))
-fit_uncap <- capnet(X, y, lambda = 0.05, alpha = 0.5, mu = 0, L = 1)
-fit_cap   <- capnet(X, y, lambda = 0.05, alpha = 0.5, mu = 1, L = 1)
+fit_uncap <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 0, L = 1)
+fit_cap   <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 1, L = 1)
 plot_redistribution(fit_uncap, fit_cap, plot = "delta")
 
 }

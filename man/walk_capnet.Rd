@@ -16,8 +16,8 @@ walk_capnet(
   walk = 1,
   lambda = 0,
   alpha = 0,
-  mu = 0,
-  max_mu_tries = 6,
+  gamma = 0,
+  max_gamma_tries = 6,
   ...
 )
 }
@@ -54,10 +54,10 @@ advancing the window. Default \code{1}.}
 \item{alpha}{Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
 \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.}
 
-\item{mu}{Nonnegative numeric scalar; strength of the contribution-cap penalty.}
+\item{gamma}{Nonnegative numeric scalar; strength of the contribution-cap penalty.}
 
-\item{max_mu_tries}{Optional numeric scalar; maximum number of tries of different
-mu values for convergence. See \link[=walk_capnet]{Details}.}
+\item{max_gamma_tries}{Optional numeric scalar; maximum number of tries of different
+gamma values for convergence. See \link[=walk_capnet]{Details}.}
 
 \item{...}{Additional arguments used in fitting. See \code{\link[=capnet]{capnet()}} for more details.}
 }
@@ -72,8 +72,8 @@ coefficients per step.}
 stacked across all evaluation rows in order of prediction.}
 \item{\code{predictions}}{Numeric matrix of out-of-sample predictions for
 the evaluation rows; shape \eqn{S\times p}.}
-\item{\code{mus}}{Numeric vector of length \eqn{n_\mathrm{new}} for the
-\code{mu} used at each step.}
+\item{\code{gammas}}{Numeric vector of length \eqn{n_\mathrm{new}} for the
+\code{gamma} used at each step.}
 }
 \description{
 Fits a linear elastic net model with an additional contribution-cap penalty
@@ -96,7 +96,7 @@ X <- matrix(rnorm(n * p), n, p)
 newx <- matrix(rnorm(n_new * p), n_new, p)
 beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
 y <- as.numeric(X \%*\% beta + rnorm(n))
-out <- walk_capnet(X, y, lambda = 0.1, alpha = 0.5, mu = 1, L = 0.5, newx = newx, walk = 1)
+out <- walk_capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 0.5, newx = newx, walk = 1)
 
 }
 \seealso{
