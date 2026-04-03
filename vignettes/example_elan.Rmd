@@ -154,7 +154,7 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
 
   labs(
     x = "Date",
-    y = expression(R^2),
+    y = "Maximum Contribution",
     color = "Model"
   ) +
 
