@@ -154,7 +154,7 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
 
   labs(
     x = "Date",
-    y = "Maximum Contribution",
+    y = expression(R^2),
     color = "Model"
   ) +
 
@@ -216,7 +216,7 @@ ggplot(plot_df, aes(x = X, y = max_col, color = spec, group = spec)) +
 
   labs(
     x = "Date",
-    y = expression(R^2),
+    y = "Maximum Contribution",
     color = "Model"
   ) +
 
@@ -234,6 +234,66 @@ ggplot(plot_df, aes(x = X, y = max_col, color = spec, group = spec)) +
     axis.text.x = element_text(angle = 0)
   )
 ```
+
+```{r fig.height = 6.5, fig.width = 10, include = FALSE}
+selected_idx <- c(1, 2, 3)
+
+contribution_list <- lapply(selected_idx, function(i) {
+  df <- contributions[[i]]
+  df$spec <- paste0(
+    methods[i],
+    ifelse(gamma_vals[i] == 0, "", paste0(" (γ=", gamma_vals[i], ")"))
+  )
+  df
+})
+
+plot_df <- dplyr::bind_rows(contribution_list) %>% 
+  dplyr::mutate(X = as.Date(X))
+
+ggplot(plot_df, aes(x = X, y = `P13`, color = spec, group = spec)) +
+  geom_line(linewidth = 0.8, alpha = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+
+  scale_color_manual(values = c(
+    "Uncapped" = "steelblue",
+    "Post-Fit Cap" = "firebrick",
+    "Walk-forward Capnet (γ=0.1)" = "darkolivegreen4"
+  )) +
+
+  # --- FIX DATE AXIS ---
+  scale_x_date(
+    breaks = seq(
+      from = as.Date("2020-01-01"),
+      to   = max(plot_df$X),
+      by   = "6 months"
+    ),
+    date_labels = "%Y-%m"
+  ) + 
+
+  labs(
+    x = "Date",
+    y = "Contribution",
+    color = "Model"
+  ) +
+
+  # --- WHITE BACKGROUND ---
+  theme_bw(base_size = 16) +
+
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(color = "gray40"),
+    
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),   # cleaner time axis
+    axis.text.x = element_text(angle = 0)
+  )
+```
+
+
+
+
 
 ```{r, include = FALSE}
 make_feature_table <- function(df_list, target_x, df_names = NULL,
