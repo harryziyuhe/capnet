@@ -494,13 +494,13 @@ The \code{walk_capnet()} function offers the ability to apply the \code{capnet()
     R> tail(predict(walk_fit))
 \end{CodeInput}
 \begin{CodeOutput}
-           prediction
-    [15,] -0.73100631
-    [16,] -3.24891204
-    [17,]  3.03570126
-    [18,] -2.56909793
-    [19,]  4.42905610
-    [20,] -0.05548754
+          prediction
+    [15,]  2.5351305
+    [16,]  0.9889227
+    [17,]  0.4888892
+    [18,] -2.8288240
+    [19,]  1.7305624
+    [20,] -0.4447762
 \end{CodeOutput}
 \end{CodeChunk}
 
@@ -548,13 +548,13 @@ The package also provides diagnostic tools for examining fitted \pkg{capnet} mod
     R> print(violations2)
 \end{CodeInput}
 \begin{CodeOutput}
-               X1 X2     X3     X4 X5 X6     X7     X8 X9      X10
-    [15,]       .  . 0.2357      .  .  .      .      .  .        .
-    [16,] 0.01699  .      .      .  .  .      .      .  .        .
-    [17,]       .  .      .      .  .  .      .      .  . 0.008612
-    [18,]       .  .      .      .  .  . 0.3704      .  .        .
-    [19,]       .  .      .      .  .  .      . 0.8492  .        .
-    [20,]       .  .      . 0.1989  .  .      . 1.5164  .        .
+          X1      X2 X3 X4 X5     X6    X7 X8 X9    X10
+    [15,]  .       .  .  .  . 0.3671     .  .  .      .
+    [16,]  . 0.02864  .  .  .      .     .  .  .      .
+    [17,]  .       .  .  .  .      . 0.229  .  .      .
+    [18,]  .       .  .  .  .      .     .  .  . 0.4176
+    [19,]  .       .  .  .  .      .     .  .  .      .
+    [20,]  .       .  .  .  .      .     .  .  .      .
 \end{CodeOutput}
 \end{CodeChunk}
 
