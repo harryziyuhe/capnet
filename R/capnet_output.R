@@ -13,14 +13,14 @@
     a0_raw <- 0
   }
 
-  contributions <- sweep(cap$newx, 2, beta_raw, "*")
-  
+  contributions <- sweep(cap$z, 2, beta_raw, "*")
+
   structure(list(
     a0 = a0_raw,
     beta = beta_raw,
     value = value,
     feature_contributions = contributions,
-    newx = cap$newx,
+    z = cap$z,
     multiplier = cap$multiplier,
     L = cap$L,
     convergence = fit$convergence,

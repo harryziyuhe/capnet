@@ -21,7 +21,7 @@
 #' @param alpha Numeric vector (default \code{seq(0, 1, length.out = 5)}) with
 #'  values in \eqn{[0,1]} to search (elastic-net mixing parameters;
 #'  \code{alpha = 1} is Lasso, \code{alpha = 0} is Ridge).
-#' @param newx Optional numeric matrix with \eqn{p} columns used to evaluate and 
+#' @param z Optional numeric matrix with \eqn{p} columns used to evaluate and
 #'  apply contribution caps. If \code{NULL}, defaults to \code{X}.
 #' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
 #'  scale feature contributions during the capping step; defaults to 1.
@@ -90,7 +90,7 @@ cv_capnet <- function(X, y,
                       family = "gaussian",
                       lambda = exp(seq(1, -5, length.out = 50)),
                       alpha = seq(0, 1, length.out = 5),
-                      newx = NULL, 
+                      z = NULL,
                       multiplier = 1,
                       intercept = TRUE,
                       standardize = TRUE, 
@@ -119,7 +119,7 @@ cv_capnet <- function(X, y,
     family = family,
     intercept = intercept,
     standardize = standardize,
-    newx = newx,
+    z = z,
     multiplier = multiplier,
     ...
   )

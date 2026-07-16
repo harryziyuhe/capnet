@@ -21,7 +21,7 @@ contribution cap(i.e., \code{gamma = 0} or large \code{L}).}
 caps applied.}
 
 \item{X}{Optional numeric matrix of features used to compute contributions.
-If \code{NULL}, the function tries \code{capped$newx}.}
+If \code{NULL}, the function uses \code{capped$z}.}
 
 \item{multiplier}{Optional numeric scalar or length-\eqn{n} vector of
 multipliers to scale contributions. If \code{NULL}, uses

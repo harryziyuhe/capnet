@@ -3,7 +3,7 @@
   family = "gaussian",
   intercept = TRUE,
   standardize = TRUE,
-  newx = NULL,
+  z = NULL,
   multiplier = 1,
   lower.limits = NULL,
   upper.limits = NULL,
@@ -22,17 +22,17 @@
   family <- normalize_family(family)
   validate_family_supported(family)
   
-  newx <- newx %||% X
-  newx <- as.matrix(newx)
-  if (ncol(newx) != p) stop("newx must have same number of columns as X.")
-  
-  m <- nrow(newx)
+  z <- z %||% X
+  z <- as.matrix(z)
+  if (ncol(z) != p) stop("z must have same number of columns as X.")
+
+  m <- nrow(z)
   
   multiplier <- as.numeric(multiplier)
   if (length(multiplier) == 1) {
     multiplier <- rep(multiplier, m)
   } else if (length(multiplier) != m) {
-    stop("multiplier must be length 1 or length nrow(newx).")
+    stop("multiplier must be length 1 or length nrow(z).")
   }
   
   if (is.null(L)) stop("L must be provided (scalar or length p).")
@@ -70,7 +70,7 @@
     family = family,
     intercept = intercept,
     standardize = standardize,
-    newx = newx,
+    z = z,
     multiplier = multiplier,
     L = L,
     lower.limits = lower.limits,
@@ -133,20 +133,20 @@
 }
 
 .capnet_cap_context <- function(spec, idx_cap = NULL) {
-  newx <- spec$newx
+  z <- spec$z
   multiplier <- spec$multiplier
-  
+
   if (!is.null(idx_cap)) {
     idx_cap <- as.integer(idx_cap)
-    newx <- newx[idx_cap, , drop = FALSE]
+    z <- z[idx_cap, , drop = FALSE]
     multiplier <- multiplier[idx_cap]
   }
-  
-  if (ncol(newx) != spec$p) stop("cap newx must have ncol = ncol(X).")
-  if (length(multiplier) != nrow(newx)) stop("multiplier must align with cap newx rows.")
-  
+
+  if (ncol(z) != spec$p) stop("z must have ncol = ncol(X).")
+  if (length(multiplier) != nrow(z)) stop("multiplier must align with z rows.")
+
   list(
-    newx = newx,
+    z = z,
     multiplier = multiplier,
     L = spec$L
   )
@@ -154,7 +154,7 @@
 
 
 # Preparing input for capnet fit
-.capnet_prepare <- function(X, y, lambda, alpha, gamma, L, newx = NULL,
+.capnet_prepare <- function(X, y, lambda, alpha, gamma, L, z = NULL,
                             par = NULL, multiplier = 1, 
                             family = NULL, intercept = TRUE, standardize = TRUE,
                             lower.limits = NULL, upper.limits = NULL,
@@ -162,15 +162,15 @@
   X_raw <- X
   y_raw <- y
   
-  if (is.null(newx)) {
-    newx <- X_raw
+  if (is.null(z)) {
+    z <- X_raw
   } else {
-    newx <- as.matrix(newx)
+    z <- as.matrix(z)
   }
 
   n <- nrow(X)
   p <- ncol(X)
-  m <- nrow(newx)
+  m <- nrow(z)
   
   if (is.null(par)) {
     par <- rep(0, p + 1)
@@ -235,7 +235,7 @@
     alpha = alpha,
     gamma = gamma,
     L = L,
-    newx = newx,
+    z = z,
     par = par,
     multiplier = multiplier,
     family = family,

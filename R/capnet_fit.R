@@ -10,7 +10,7 @@
   lambda <- params$lambda
   gamma <- params$gamma
   
-  newx <- cap$newx
+  newx <- cap$z
   multiplier <- cap$multiplier
   L <- cap$L
   m <- nrow(newx)
@@ -35,15 +35,15 @@
     # Contribution cap penalty
     # Contribution cap needs to be computed in the original scale, so if the
     # data is standardized, transform contributions back to the original scale
-    m <- nrow(cap$newx)
+    m <- nrow(newx)
     beta_raw <- beta_rest / train$scaling_factor
-    
-    feature_contribution <- sweep(sweep(cap$newx, 2, beta_raw, "*"), 1, cap$multiplier, "*")
+
+    feature_contribution <- sweep(sweep(newx, 2, beta_raw, "*"), 1, cap$multiplier, "*")
     excess_contribution <- sweep(
       sweep(
-        pmax(sweep(abs(feature_contribution), 2, cap$L, "-"), 0), 
+        pmax(sweep(abs(feature_contribution), 2, cap$L, "-"), 0),
         2, train$scaling_factor, "*"
-      ), 
+      ),
       1, cap$multiplier, "/"
     )
     excess_penalty <- sum(excess_contribution ^ 2) / m
@@ -71,18 +71,18 @@
     # Because contribution cap penalty is calculated in the original scale,
     # so if the data is standardized, scaling factors also show up in the gradient
     
-    m <- nrow(cap$newx)
+    m <- nrow(newx)
     beta_raw <- beta_rest / train$scaling_factor
-    
-    feature_contribution <- sweep(sweep(cap$newx, 2, beta_raw, "*"), 1, cap$multiplier, "*")
+
+    feature_contribution <- sweep(sweep(newx, 2, beta_raw, "*"), 1, cap$multiplier, "*")
     excess_contribution <- sweep(
       sweep(
-        pmax(sweep(abs(feature_contribution),  2, cap$L, "-"), 0), 
+        pmax(sweep(abs(feature_contribution), 2, cap$L, "-"), 0),
         2, train$scaling_factor, "*"
-      ), 
+      ),
       1, cap$multiplier, "/"
     )
-    d_excess <- excess_contribution * sign(feature_contribution) * cap$newx
+    d_excess <- excess_contribution * sign(feature_contribution) * newx
     gradient_cap <- (2 * params$gamma / m) * colSums(d_excess)
 
     gradient_rest <- gradient_rest + gradient_cap

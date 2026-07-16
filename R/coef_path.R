@@ -17,7 +17,7 @@
 #' @param gamma Nonnegative numeric scalar; strength of the contribution-cap 
 #' penalty (default \code{1}).
 #' @param ... Additional arguments forwarded to \code{capnet()}, e.g.,
-#'  \code{newx}, \code{par}, \code{multiplier}, \code{intercept},
+#'  \code{z}, \code{par}, \code{multiplier}, \code{intercept},
 #'  \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit},
 #'  \code{check.finite}, \code{verbose}.
 #' 

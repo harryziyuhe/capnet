@@ -5,10 +5,9 @@
 #' contribution matrix.
 #' 
 #' @param object A fitted \code{capnet} model returned by [capnet()].
-#' @param newx Optional numeric matrix of new data on which to evaluate
-#'  contribution caps. If \code{NULL}, uses the data stored in
-#'  \code{object$newx} or the contribution matrix
-#'  \code{object$feature_contributions}
+#' @param z Optional numeric matrix of new data on which to evaluate
+#'  contribution caps. If \code{NULL}, uses the contribution matrix
+#'  stored in \code{object$feature_contributions}.
 #' @param multiplier Optional numeric scalar or length-\eqn{p} vector to override
 #'  the multiplier used when the model was fit. If \code{NULL}, defaults to
 #'  \code{object$multiplier}.
@@ -19,7 +18,7 @@
 #'    violations of the contribution cap.}
 #'  \item{\code{rows}}{Integer vector of row indices (observations) where at
 #'    least one feature exceeded its cap.}
-#'  \item{\code{excess}}{Numeric matrix of the same dimension as \code{newx}
+#'  \item{\code{excess}}{Numeric matrix of the same dimension as \code{z}
 #'    (or \code{object$feature_contributions}) containing the amount by which
 #'    each absolute contribution exceeded its cap. Zero entries indicate no 
 #'    violation.}
@@ -47,9 +46,9 @@
 #' 
 #' @export
 
-capnet_violations <- function(object, newx = NULL, multiplier = NULL) {
-  if (!is.null(newx)) {
-    m <- nrow(newx)
+capnet_violations <- function(object, z = NULL, multiplier = NULL) {
+  if (!is.null(z)) {
+    m <- nrow(z)
     if (is.null(multiplier)) {
       if (length(unique(object$multiplier)) != 1) {
         warning("Did not supply a multiplier. Original model has varying multiplier values. Defaulting to the first observed multiplier.")
@@ -57,7 +56,7 @@ capnet_violations <- function(object, newx = NULL, multiplier = NULL) {
       multiplier <- rep(unique(object$multiplier)[1], m)
     }
     beta <- object$beta
-    contribution <- sweep(sweep(newx, 2, beta, "*"), 1, multiplier, "*")
+    contribution <- sweep(sweep(z, 2, beta, "*"), 1, multiplier, "*")
   } else {
     contribution <- object$feature_contributions
   }

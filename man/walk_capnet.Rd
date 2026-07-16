@@ -8,7 +8,7 @@ walk_capnet(
   X,
   y,
   L,
-  newx,
+  z,
   family = "gaussian",
   intercept = TRUE,
   standardize = TRUE,
@@ -31,8 +31,8 @@ features and rows are observations.}
 contribution ceiling(s). If scalar, the same ceiling is applied to all
 coefficients}
 
-\item{newx}{Optional numeric matrix with \eqn{p} columns used to evaluate and
-enforce contribution caps. If \code{NULL}, defaults to \code{X}.}
+\item{z}{Numeric matrix with \eqn{p} columns used to evaluate and
+enforce contribution caps (required).}
 
 \item{family}{Optional character scalar (e.g. "binomial"), function (e.g.
 \code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).}
@@ -83,7 +83,7 @@ all rows up to the current cut point and evaluated on the next \code{walk}
 rows.
 }
 \details{
-Given the evaluation matrix \code{newx} of size \eqn{S\times p}. At step
+Given the evaluation matrix \code{z} of size \eqn{S\times p}. At step
 \eqn{s=1,\dots,S}, the model is trained on \code{X} and \code{y} and the
 contribution caps are evaluated on rows
 \eqn{(s-1)\times\text{walk}:s\times\text{walk}}. Each fit calls
@@ -93,10 +93,10 @@ contribution caps are evaluated on rows
 set.seed(1)
 n <- 60; p <- 6; n_new <- 10
 X <- matrix(rnorm(n * p), n, p)
-newx <- matrix(rnorm(n_new * p), n_new, p)
+z <- matrix(rnorm(n_new * p), n_new, p)
 beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
 y <- as.numeric(X \%*\% beta + rnorm(n))
-out <- walk_capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 0.5, newx = newx, walk = 1)
+out <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5, gamma = 1, walk = 1)
 
 }
 \seealso{

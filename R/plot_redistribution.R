@@ -14,7 +14,7 @@
 #' @param capped An object returned by \code{capnet()} fit with contribution
 #'  caps applied.
 #' @param X Optional numeric matrix of features used to compute contributions.
-#'  If \code{NULL}, the function tries \code{capped$newx}.
+#'  If \code{NULL}, the function uses \code{capped$z}.
 #' @param multiplier Optional numeric scalar or length-\eqn{n} vector of 
 #'  multipliers to scale contributions. If \code{NULL}, uses 
 #'  \code{capped$multiplier} when available; otherwise defaults to 1.
@@ -64,7 +64,7 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
   beta_uncapped <- uncapped$beta
   beta_capped <- capped$beta
   
-  X <- if (!is.null(X)) X else capped$newx
+  X <- if (!is.null(X)) X else capped$z
   if (!is.null(multiplier)) {
     if (length(multiplier) == 1) multiplier <- rep(multiplier, nrow(X))
   } else multiplier <- capped$multiplier

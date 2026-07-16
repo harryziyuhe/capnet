@@ -48,12 +48,12 @@ coef.walk_capnet <- function(x, index = NULL, ...) {
 #' 
 #' @param object A fitted object of class \code{"capnet"}
 #' @param newdata Optional numeric matrix for prediction. If \code{NULL}, uses
-#'  \code{object$newx}
+#'  \code{object$z} (the evaluation matrix stored at fit time).
 #' @param type "link" returns linear predictor eta; "response" returns mean mu.
 #' @param ... Further arguments passed to or from other methods.
-#' 
-#' @return Numeric vector of predictions (length = number of rows in 
-#'  \code{newx}).
+#'
+#' @return Numeric vector of predictions (length = number of rows in
+#'  \code{newdata} or \code{object$z}).
 #'  
 #' @seealso [capnet()], [predict()]  
 #'  
@@ -62,7 +62,7 @@ coef.walk_capnet <- function(x, index = NULL, ...) {
 predict.capnet <- function(object, newdata  = NULL, type = c("link", "response"), ...) {
   type <- match.arg(type)
   if (is.null(newdata)) {
-    newx <- object$newx
+    newx <- object$z
   } else {
     newx <- as.matrix(newdata)
   }

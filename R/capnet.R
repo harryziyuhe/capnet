@@ -21,7 +21,7 @@
 #' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
 #'  are standardized for fitting; coefficients are returned on the original scale.
 #'  Default \code{TRUE}.
-#' @param newx Optional numeric matrix with \eqn{p} columns used to evaluate and 
+#' @param z Optional numeric matrix with \eqn{p} columns used to evaluate and
 #'  enforce contribution caps. If \code{NULL}, defaults to \code{X}.
 #' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
 #'  scale feature contributions during the capping step. Defaults to 1.
@@ -48,8 +48,8 @@
 #'  \item{\code{value}}{Numeric; minimized objective value.}
 #'  \item{\code{feature_contributions}}{Numeric matrix of shape
 #'    \eqn{n_{\mathrm{new}}\times p} giving per-feature contributions evaluated
-#'    on \code{newx} (rows) for each feature (columns).}
-#'  \item{\code{newx}}{The evaluation matrix.}
+#'    on \code{z} (rows) for each feature (columns).}
+#'  \item{\code{z}}{The evaluation matrix.}
 #'  \item{\code{convergence}}{Integer code; \code{0} indicates successful
 #'    convergence, negative values indicate OWL-QN/L-BFGS execution errors.}
 #'  \item{\code{message}}{Character string describing any optimizer message 
@@ -94,7 +94,7 @@ capnet <- function(X, y, L,
                    family = "gaussian",
                    intercept = TRUE,
                    standardize = TRUE,
-                   newx = NULL,
+                   z = NULL,
                    multiplier = 1,
                    lambda = 0,
                    alpha = 0,
@@ -106,8 +106,8 @@ capnet <- function(X, y, L,
                    par = NULL,
                    ...) {
   
-  if (anyNA(X) || anyNA(y) || anyNA(newx)) {
-    stop("X or y or newx contains NA values")
+  if (anyNA(X) || anyNA(y) || anyNA(z)) {
+    stop("X, y, or z contains NA values")
   }
   
   call <- match.call()
@@ -117,7 +117,7 @@ capnet <- function(X, y, L,
     family = family,
     intercept = intercept,
     standardize = standardize,
-    newx = newx,
+    z = z,
     multiplier = multiplier,
     lower.limits = lower.limits,
     upper.limits = upper.limits,

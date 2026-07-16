@@ -12,7 +12,7 @@ cv_capnet(
   family = "gaussian",
   lambda = exp(seq(1, -5, length.out = 50)),
   alpha = seq(0, 1, length.out = 5),
-  newx = NULL,
+  z = NULL,
   multiplier = 1,
   intercept = TRUE,
   standardize = TRUE,
@@ -45,7 +45,7 @@ of nonnegative elastic-net penalty strengths to search.}
 values in \eqn{[0,1]} to search (elastic-net mixing parameters;
 \code{alpha = 1} is Lasso, \code{alpha = 0} is Ridge).}
 
-\item{newx}{Optional numeric matrix with \eqn{p} columns used to evaluate and
+\item{z}{Optional numeric matrix with \eqn{p} columns used to evaluate and
 apply contribution caps. If \code{NULL}, defaults to \code{X}.}
 
 \item{multiplier}{Optional numeric scalar or length-\eqn{n} vector used to

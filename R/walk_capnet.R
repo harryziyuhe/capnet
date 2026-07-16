@@ -15,8 +15,8 @@
 #' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
 #'  contribution ceiling(s). If scalar, the same ceiling is applied to all
 #'  coefficients
-#' @param newx Optional numeric matrix with \eqn{p} columns used to evaluate and 
-#'  enforce contribution caps. If \code{NULL}, defaults to \code{X}.
+#' @param z Numeric matrix with \eqn{p} columns used to evaluate and
+#'  enforce contribution caps (required).
 #' @param family Optional character scalar (e.g. "binomial"), function (e.g. 
 #' \code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).
 #' @param intercept Logical; should an intercept be fitted? Default \code{TRUE}.
@@ -49,7 +49,7 @@
 #'    \code{gamma} used at each step.}
 #' 
 #' @details
-#' Given the evaluation matrix \code{newx} of size \eqn{S\times p}. At step 
+#' Given the evaluation matrix \code{z} of size \eqn{S\times p}. At step 
 #' \eqn{s=1,\dots,S}, the model is trained on \code{X} and \code{y} and the 
 #' contribution caps are evaluated on rows 
 #' \eqn{(s-1)\times\text{walk}:s\times\text{walk}}. Each fit calls 
@@ -61,14 +61,14 @@
 #' set.seed(1)
 #' n <- 60; p <- 6; n_new <- 10
 #' X <- matrix(rnorm(n * p), n, p)
-#' newx <- matrix(rnorm(n_new * p), n_new, p)
+#' z <- matrix(rnorm(n_new * p), n_new, p)
 #' beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
 #' y <- as.numeric(X %*% beta + rnorm(n))
-#' out <- walk_capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 0.5, newx = newx, walk = 1)
+#' out <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5, gamma = 1, walk = 1)
 #' 
 #' @export
 
-walk_capnet <- function(X, y, L, newx,
+walk_capnet <- function(X, y, L, z,
                         family = "gaussian",
                         intercept = TRUE, 
                         standardize = TRUE,
@@ -81,8 +81,8 @@ walk_capnet <- function(X, y, L, newx,
                         ...) {
   
   # Stop if there is any NA values in data
-  if (anyNA(X) || anyNA(y) || anyNA(newx)) {
-    stop("X or y or newx contains NA values")
+  if (anyNA(X) || anyNA(y) || anyNA(z)) {
+    stop("X, y, or z contains NA values")
   }
   
   spec <- .capnet_spec(
@@ -90,13 +90,13 @@ walk_capnet <- function(X, y, L, newx,
     family = family,
     intercept = intercept,
     standardize = standardize,
-    newx = newx,
+    z = z,
     multiplier = multiplier,
     ...
   )
   
   train <- .capnet_standardize_train(spec)
-  m <- nrow(spec$newx)
+  m <- nrow(spec$z)
   p <- spec$p
   
   intercepts <- numeric(m)
@@ -154,8 +154,8 @@ walk_capnet <- function(X, y, L, newx,
     predictions[idx_cap] <- rowSums(model$feature_contributions) + model$a0
   }
   
-  if (xts::is.xts(newx)) {
-    ord <- zoo::index(newx)
+  if (xts::is.xts(z)) {
+    ord <- zoo::index(z)
     
     intercepts <- xts::as.xts(intercepts, order.by = ord)
     betas <- xts::as.xts(betas, order.by = ord)

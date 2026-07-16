@@ -4,15 +4,14 @@
 \alias{capnet_violations}
 \title{Check contribution-cap violations for a fitted \code{capnet} model}
 \usage{
-capnet_violations(object, newx = NULL, multiplier = NULL)
+capnet_violations(object, z = NULL, multiplier = NULL)
 }
 \arguments{
 \item{object}{A fitted \code{capnet} model returned by \code{\link[=capnet]{capnet()}}.}
 
-\item{newx}{Optional numeric matrix of new data on which to evaluate
-contribution caps. If \code{NULL}, uses the data stored in
-\code{object$newx} or the contribution matrix
-\code{object$feature_contributions}}
+\item{z}{Optional numeric matrix of new data on which to evaluate
+contribution caps. If \code{NULL}, uses the contribution matrix
+stored in \code{object$feature_contributions}.}
 
 \item{multiplier}{Optional numeric scalar or length-\eqn{p} vector to override
 the multiplier used when the model was fit. If \code{NULL}, defaults to
@@ -24,7 +23,7 @@ A list with the following components:
 violations of the contribution cap.}
 \item{\code{rows}}{Integer vector of row indices (observations) where at
 least one feature exceeded its cap.}
-\item{\code{excess}}{Numeric matrix of the same dimension as \code{newx}
+\item{\code{excess}}{Numeric matrix of the same dimension as \code{z}
 (or \code{object$feature_contributions}) containing the amount by which
 each absolute contribution exceeded its cap. Zero entries indicate no
 violation.}

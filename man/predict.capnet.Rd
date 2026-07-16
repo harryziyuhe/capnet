@@ -10,7 +10,7 @@
 \item{object}{A fitted object of class \code{"capnet"}}
 
 \item{newdata}{Optional numeric matrix for prediction. If \code{NULL}, uses
-\code{object$newx}}
+\code{object$z} (the evaluation matrix stored at fit time).}
 
 \item{type}{"link" returns linear predictor eta; "response" returns mean mu.}
 
@@ -18,7 +18,7 @@
 }
 \value{
 Numeric vector of predictions (length = number of rows in
-\code{newx}).
+\code{newdata} or \code{object$z}).
 }
 \description{
 Predict from a fitted \code{capnet} model
