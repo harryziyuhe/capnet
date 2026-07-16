@@ -359,7 +359,7 @@ This section provides a simple illustration of using the \pkg{capnet} package to
 We first load a small simulated dataset, including the training design matrix and response vector, the contribution cap vector, and evaluation design matrix, using the built-in \\\code{simulate_capnet_data()} function.
 
 \begin{Code}
-    R> set.seed(42)
+    R> set.seed(123)
     R> data <- simulate_capnet_data(n=100, p=10, m=20)
     R> X <- data$X
     R> y <- data$y
@@ -403,17 +403,17 @@ By default, the model fits a Gaussian model using the training design matrix \co
 \end{CodeInput}
 \begin{CodeOutput}
                        beta
-    (Intercept) -0.04415975
-    X1           0.51001177
-    X2          -1.71345010
-    X3           1.02256470
-    X4          -1.02555103
-    X5           0.60040569
-    X6           0.07398728
-    X7           0.97554411
-    X8           1.49418615
-    X9          -0.39978010
-    X10         -0.02234612
+    (Intercept) -0.05296571
+    X1           0.60499987
+    X2           0.72693527
+    X3          -0.04534115
+    X4           0.00000000
+    X5           0.00000000
+    X6           1.25057715
+    X7           0.53030065
+    X8           0.00000000
+    X9          -1.19042359
+    X10         -1.57866691
 \end{CodeOutput}
 \end{CodeChunk}
 
@@ -423,12 +423,12 @@ By default, the model fits a Gaussian model using the training design matrix \co
 \end{CodeInput}
 \begin{CodeOutput}
                 [,1]
-    [15,] -0.7093457
-    [16,] -2.7684809
-    [17,]  2.8157814
-    [18,] -2.7043587
-    [19,]  4.6532123
-    [20,] -0.6632460
+    [15,]  2.5403605
+    [16,]  0.9898385
+    [17,]  0.3925917
+    [18,] -2.8235154
+    [19,]  1.6759247
+    [20,] -0.4134184
 \end{CodeOutput}
 \end{CodeChunk}
 
@@ -472,20 +472,20 @@ The \code{walk_capnet()} function offers the ability to apply the \code{capnet()
     R> head(coef(walk_fit))
 \end{CodeInput}
 \begin{CodeOutput}
-            intercept        X1        X2        X3         X4        X5
-    [1,] -0.010473888 0.5295727 -1.909948 1.2157910 -1.0642892 0.5980203
-    [2,] -0.010469909 0.5295734 -1.909942 1.2157780 -1.0642884 0.5980221
-    [3,] -0.010472161 0.5295688 -1.909946 1.2157802 -1.0642919 0.5980236
-    [4,]  0.017093792 0.4952672 -1.668442 1.0588963 -0.9992213 0.6257662
-    [5,] -0.003749633 0.4827738 -1.869136 0.9111731 -1.0221476 0.6174209
-    [6,] -0.010472971 0.5295687 -1.909944 1.2157801 -1.0642940 0.5980240
-                 X6       X7       X8         X9         X10
-    [1,] 0.05092109 1.020880 1.754921 -0.3613088 -0.05495997
-    [2,] 0.05093191 1.020894 1.754934 -0.3613085 -0.05495241
-    [3,] 0.05093173 1.020889 1.754937 -0.3613081 -0.05495411
-    [4,] 0.07342490 1.014856 1.792987 -0.3904655 -0.03321733
-    [5,] 0.07924715 1.026394 1.780540 -0.3863961 -0.02650655
-    [6,] 0.05093242 1.020889 1.754933 -0.3613079 -0.05495323
+           intercept        X1        X2          X3 X4 X5       X6
+    [1,] -0.05641649 0.6125209 0.7419803 -0.05551362  0  0 1.259265
+    [2,] -0.06131368 0.6086554 0.7330080 -0.05157296  0  0 1.203195
+    [3,] -0.05254245 0.6097964 0.7376851 -0.04832572  0  0 1.263657
+    [4,] -0.05254271 0.6097953 0.7377003 -0.04832469  0  0 1.263657
+    [5,] -0.05698816 0.6092069 0.7353257 -0.04996770  0  0 1.233013
+    [6,] -0.05254276 0.6097992 0.7376832 -0.04832585  0  0 1.263656
+                X7 X8        X9       X10
+    [1,] 0.5393099  0 -1.142731 -1.635969
+    [2,] 0.5306406  0 -1.189979 -1.625752
+    [3,] 0.5305039  0 -1.194957 -1.630794
+    [4,] 0.5305081  0 -1.194946 -1.630793
+    [5,] 0.5305765  0 -1.192422 -1.628245
+    [6,] 0.5305039  0 -1.194958 -1.630792
 \end{CodeOutput}
 \end{CodeChunk}
 
@@ -517,6 +517,7 @@ The \code{cv_capnet()} function implements grid-search cross-validation and has 
     R> gamma <- 0.05
     
     # K-fold grid-search cross-validate on lambda and alpha
+    R> set.seed(123)
     R> cv_fit1 <- cv_capnet(X, y, gamma, L, K = 5)
 
     # User-specified cross-validation splits
