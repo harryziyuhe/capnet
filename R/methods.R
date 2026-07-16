@@ -147,7 +147,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
            x = expression(alpha), y = expression(log[10](lambda)), fill = "Rank") +
       theme_minimal()
     print(p)
-    return(invisible(object))
+    return(invisible(p))
   }
   
   if (!is.null(alpha)) {
@@ -174,7 +174,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
       ) +
       theme_minimal()
     print(p)
-    return(invisible(object))
+    return(invisible(p))
   }
   
   if (!is.null(lambda)) {
@@ -202,7 +202,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
       ) +
       theme_minimal()
     print(p)
-    return(invisible(object))
+    return(invisible(p))
   }
   
   invisible(object)
