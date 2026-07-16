@@ -117,15 +117,15 @@ Contribution caps address this gap by integrating influence constraints directly
 
 In this subsection, we present two simplified linear regression examples that illustrate the theoretical considerations discussed above and demonstrate practical use cases for \pkg{capnet}.
 
-First, we consider a simulated setting in which the outcome variable $y$ is generated from a latent feature matrix $Z$ according to a linear data generating process. In estimation and prediction, however, the analyst does not observe $Z$ directly but instead observes a noisy proxy matrix $X$, whose distribution exhibits heavier tails for a subset of covariates. This setup can be interpreted as a measurement error problem in which the observed covariates are imperfect and heteroskedastic proxies for the true latent features.
+First, we consider a simulated setting in which the outcome variable $y$ is generated from a latent true-signal matrix $X^*$ according to a linear data generating process. In estimation and prediction, however, the analyst does not observe $X^*$ directly but instead observes a noisy proxy matrix $X$, whose distribution exhibits heavier tails for a subset of covariates. This setup can be interpreted as a measurement error problem in which the observed covariates are imperfect and heteroskedastic proxies for the true latent features.
 
 Formally, the outcome is generated as
 \[
-y_i = Z_i \beta + \varepsilon_i, \quad \varepsilon_i \sim \mathcal{N}(0, \sigma^2),
+y_i = X^*_i \beta + \varepsilon_i, \quad \varepsilon_i \sim \mathcal{N}(0, \sigma^2),
 \]
 where $\beta$ is a sparse coefficient vector.\footnote{Sparsity is introduced by randomly setting a subset of coefficients to zero.}
 
-The observed covariates are constructed by adding noise to $Z$. Features are partitioned into a stable set $\mathcal{S}$ and an unstable set $\mathcal{U}$. For features in $\mathcal{S}$, the added noise is homoskedastic Gaussian:
+The observed covariates are constructed by adding noise to $X^*$. Features are partitioned into a stable set $\mathcal{S}$ and an unstable set $\mathcal{U}$. For features in $\mathcal{S}$, the added noise is homoskedastic Gaussian:
 \[
 \eta_{ij} \sim \mathcal{N}(0, \sigma_{\text{low}}^2), \quad j \in \mathcal{S}.
 \]
@@ -145,9 +145,9 @@ Conditional on $F_{ij}$, the noise term follows
 \[
 \eta_{ij} \mid F_{ij} \sim \mathcal{N}(0, s_{ij}^2).
 \]
-The observed design matrix is then given by $X = Z + \eta$.
+The observed design matrix is then given by $X = X^* + \eta$.
 
-Substituting $Z_i = X_i - \eta_i$, the response can equivalently be written in terms of the observed covariates as
+Substituting $X^*_i = X_i - \eta_i$, the response can equivalently be written in terms of the observed covariates as
 \[
 y_i = X_i\beta + u_i,
 \]
@@ -155,7 +155,7 @@ where
 \[
 u_i = \varepsilon_i - \eta_i \beta .
 \]
-Thus, when the analyst estimates the model using the observed design matrix $X$, the fitted model is based on covariates that are noisy proxies for the latent signal $Z$. Because the measurement error for unstable features occasionally has much larger variance, the observed covariates inherit heavy-tailed behavior. These tail realizations can generate large realized contributions $X_{ij}\beta_j$, even when the underlying latent features are more stable.
+Thus, when the analyst estimates the model using the observed design matrix $X$, the fitted model is based on covariates that are noisy proxies for the latent signal $X^*$. Because the measurement error for unstable features occasionally has much larger variance, the observed covariates inherit heavy-tailed behavior. These tail realizations can generate large realized contributions $X_{ij}\beta_j$, even when the underlying latent features are more stable.
 
 The observed process produces covariates that are heteroskedastic and heavy-tailed for unstable features. When estimating linear models using $X$, conventional methods may encounter two related challenges. First, extreme realizations can exert disproportionate influence on coefficient estimates, leading to instability and degraded out-of-sample performance. Second, large covariate realizations may induce excessive concentration of predictive weight in a small number of features, allowing individual covariates to dominate the magnitude and direction of predictions. Importantly, the second issue persists even when coefficient shrinkage is applied. Because classical regularization methods act on $\beta$ rather than on realized contributions $X_{ij}\beta_j$, extreme covariate realizations can still generate large contributions and dominate model outputs.
 
@@ -359,17 +359,15 @@ This section provides a simple illustration of using the \pkg{capnet} package to
 We first load a small simulated dataset, including the training design matrix and response vector, the contribution cap vector, and evaluation design matrix, using the built-in \\\code{simulate_capnet_data()} function.
 
 \begin{Code}
-    R> n <- 100
-    R> p <- 10
-    R> m <- 20
-    R> data <- simulate_capnet_data(n=100,p=10,m=20)
+    R> set.seed(42)
+    R> data <- simulate_capnet_data(n=100, p=10, m=20)
     R> X <- data$X
     R> y <- data$y
     R> L <- data$L
-    R> newx <- data1$newx
+    R> Z <- data$Z
 \end{Code}
 
-The \pkg{capnet} package is mainly used with calls to estimation three functions as shown in Table~\ref{tab:capnet-functions}: \code{capnet()}, \code{walk_capnet()}, and \code{cv_capnet()}. The interface is designed to mimic popular \proglang{R} packages for regularized generalized linear models, most notably \pkg{glmnet} \citep{friedman2010}. To perform the contribution-capped regression, \code{capnet()} takes as required inputs, the design matrix \code{x}, the response vector \code{y}, and the contribution cap vector \code{L}. The function also take several optional arguments. The \code{newx} matrix specifies the evaluation matrix for the feature contributions. The \code{family} argument specifies the regression model (\code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, or \code{"gamma"}). \code{alpha}, \code{lambda}, and \code{gamma} controls the elastic net and contribution cap penalty strengths, and \code{upper.limits} and \code{lower.limits} vectors specify coefficients box constraints. 
+The \pkg{capnet} package is mainly used with calls to estimation three functions as shown in Table~\ref{tab:capnet-functions}: \code{capnet()}, \code{walk_capnet()}, and \code{cv_capnet()}. The interface is designed to mimic popular \proglang{R} packages for regularized generalized linear models, most notably \pkg{glmnet} \citep{friedman2010}. To perform the contribution-capped regression, \code{capnet()} takes as required inputs, the design matrix \code{x}, the response vector \code{y}, and the contribution cap vector \code{L}. The function also take several optional arguments. The \code{z} matrix specifies the evaluation matrix for the feature contributions. The \code{family} argument specifies the regression model (\code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, or \code{"gamma"}). \code{alpha}, \code{lambda}, and \code{gamma} controls the elastic net and contribution cap penalty strengths, and \code{upper.limits} and \code{lower.limits} vectors specify coefficients box constraints. 
 
 By default, the model fits a Gaussian model using the training design matrix \code{X} as the evaluation matrix and adds no elastic net or contribution cap penalties and no box constraints. Below are sample usages with different combinations of parameters
 
@@ -387,13 +385,13 @@ By default, the model fits a Gaussian model using the training design matrix \co
     R> fit3 <- capnet(X, y, L, alpha = alpha, lambda = lambda, gamma = gamma)
     
     # Evaluating capnet on evaluation matrix
-    R> fit4 <- capnet(X, y, L, newx = newx, alpha = alpha, lambda = lambda, 
+    R> fit4 <- capnet(X, y, L, z = Z, alpha = alpha, lambda = lambda,
     +    gamma = gamma)
-    
+
     # Adding box constraints
     upper.limits <- c(rep(Inf, 5), rep(0, 5))
     lower.limits <- c(rep(0, 5), rep(-Inf, 5))
-    R> fit5 <- capnet(X, y, L, newx = newx, alpha = alpha, lambda = lambda, 
+    R> fit5 <- capnet(X, y, L, z = Z, alpha = alpha, lambda = lambda,
     +    gamma = gamma, lower.limits = lower.limits, upper.limits = upper.limits)
 \end{Code}
 
@@ -421,7 +419,7 @@ By default, the model fits a Gaussian model using the training design matrix \co
 
 \begin{CodeChunk}
 \begin{CodeInput}
-    R> predict(fit4, newdata = tail(newx))
+    R> predict(fit4, newdata = tail(Z))
 \end{CodeInput}
 \begin{CodeOutput}
                 [,1]
@@ -439,10 +437,10 @@ An accompany function, \code{coef_path()} is used to visualize the coefficient p
     R> lambdas <- exp(seq(2, -5, length.out = 100))
     R> alphas <- seq(0, 1, length.out = 100)
     
-    R> path_l <- coef_path(X, y, L, alpha = alpha, gamma = gamma, lambda = lambdas, 
-    +    newx = newx)
-    R> path_a <- coef_path(X, y, L, alpha = alphas, gamma = gamma, lambda = 0.5, 
-    +    newx = newx)
+    R> path_l <- coef_path(X, y, L, alpha = alpha, gamma = gamma, lambda = lambdas,
+    +    z = Z)
+    R> path_a <- coef_path(X, y, L, alpha = alphas, gamma = gamma, lambda = 0.5,
+    +    z = Z)
 
     R> plot(path_l)
     R> plot(path_a)
@@ -460,10 +458,10 @@ An accompany function, \code{coef_path()} is used to visualize the coefficient p
     \label{fig:paths}
 \end{figure}
 
-The \code{walk_capnet()} function offers the ability to apply the \code{capnet()} function iteratively over observations in the evaluation set. This is useful because fitting a \pkg{capnet} model over multiple observations can produce an over-penalized model that perform worse in out-of-sample prediction tasks. The walk-forward refitting framework is also useful for time-series tasks, where data arrive sequentially. The \code{walk_capnet()} functions allows for easy sequential fitting and evaluation along the evaluation path. The interface of \code{walk_capnet()} is very similar to that of \code{capnet}, with the exception that it also takes the evaluation dataset \code{newx} as a required input and has an additional optional argument \code{walk}, which controls the step size of the iterative fitting procedure. 
+The \code{walk_capnet()} function offers the ability to apply the \code{capnet()} function iteratively over observations in the evaluation set. This is useful because fitting a \pkg{capnet} model over multiple observations can produce an over-penalized model that perform worse in out-of-sample prediction tasks. The walk-forward refitting framework is also useful for time-series tasks, where data arrive sequentially. The \code{walk_capnet()} functions allows for easy sequential fitting and evaluation along the evaluation path. The interface of \code{walk_capnet()} is very similar to that of \code{capnet}, with the exception that it also takes the evaluation matrix \code{Z} as a required input and has an additional optional argument \code{walk}, which controls the step size of the iterative fitting procedure.
 
 \begin{Code}
-    R> fit_walk <- walk_capnet(X, y, L, newx, walk = 1, alpha = alpha, 
+    R> fit_walk <- walk_capnet(X, y, L, Z, walk = 1, alpha = alpha,
     +    lambda = lambda, gamma = gamma)
 \end{Code}
 
@@ -545,8 +543,8 @@ The package also provides diagnostic tools for examining fitted \pkg{capnet} mod
     # Default uses the valuation set of the original fit
     R> violations1 <- capnet_violations(fit)
 
-    # User can specify a new valuation set
-    R> violations2 <- capnet_violations(fit, newx = tail(newx))
+    # User can specify a new evaluation matrix
+    R> violations2 <- capnet_violations(fit, z = tail(Z))
     R> print(violations2)
 \end{CodeInput}
 \begin{CodeOutput}
@@ -575,9 +573,9 @@ The function \code{plot\_redistribution()} compares two fitted \pkg{capnet} mode
 \end{figure}
 
 \begin{Code}
-    R> newx <- newx[1:5,]
-    R> fit1 <- capnet(X, y, L, alpha = alpha, lambda = lambda, gamma = 0)
-    R> fit2 <- capnet(X, y, L, alpha = alpha, lambda = lambda, gamma = 10)
+    R> z_small <- Z[1:5, ]
+    R> fit1 <- capnet(X, y, L, z = z_small, alpha = alpha, lambda = lambda, gamma = 0)
+    R> fit2 <- capnet(X, y, L, z = z_small, alpha = alpha, lambda = lambda, gamma = 10)
 
     # Side-by-side bar chart comparing feature coefficients and contributions
     R> plot_redistribution(fit1, fit2, plot = "delta")
