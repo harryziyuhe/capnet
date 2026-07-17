@@ -403,17 +403,17 @@ By default, the model fits a Gaussian model using the training design matrix \co
 \end{CodeInput}
 \begin{CodeOutput}
                        beta
-    (Intercept) -0.05296571
-    X1           0.60499987
-    X2           0.72693527
-    X3          -0.04534115
+    (Intercept) -0.05893013
+    X1           0.54103371
+    X2           0.63589187
+    X3          -0.04137102
     X4           0.00000000
-    X5           0.00000000
-    X6           1.25057715
-    X7           0.53030065
+    X5           0.03323595
+    X6           1.12884937
+    X7           0.50229059
     X8           0.00000000
-    X9          -1.19042359
-    X10         -1.57866691
+    X9          -1.09419889
+    X10         -1.20934196
 \end{CodeOutput}
 \end{CodeChunk}
 
@@ -423,12 +423,12 @@ By default, the model fits a Gaussian model using the training design matrix \co
 \end{CodeInput}
 \begin{CodeOutput}
                 [,1]
-    [15,]  2.5403605
-    [16,]  0.9898385
-    [17,]  0.3925917
-    [18,] -2.8235154
-    [19,]  1.6759247
-    [20,] -0.4134184
+    [15,]  2.1106226
+    [16,]  0.9202362
+    [17,]  0.1498027
+    [18,] -2.3290028
+    [19,]  1.3692345
+    [20,] -0.2007312
 \end{CodeOutput}
 \end{CodeChunk}
 
@@ -461,7 +461,7 @@ An accompany function, \code{coef_path()} is used to visualize the coefficient p
 The \code{walk_capnet()} function offers the ability to apply the \code{capnet()} function iteratively over observations in the evaluation set. This is useful because fitting a \pkg{capnet} model over multiple observations can produce an over-penalized model that perform worse in out-of-sample prediction tasks. The walk-forward refitting framework is also useful for time-series tasks, where data arrive sequentially. The \code{walk_capnet()} functions allows for easy sequential fitting and evaluation along the evaluation path. The interface of \code{walk_capnet()} is very similar to that of \code{capnet}, with the exception that it also takes the evaluation matrix \code{Z} as a required input and has an additional optional argument \code{walk}, which controls the step size of the iterative fitting procedure.
 
 \begin{Code}
-    R> fit_walk <- walk_capnet(X, y, L, Z, walk = 1, alpha = alpha,
+    R> walk_fit <- walk_capnet(X, y, L, Z, walk = 1, alpha = alpha,
     +    lambda = lambda, gamma = gamma)
 \end{Code}
 
@@ -472,20 +472,20 @@ The \code{walk_capnet()} function offers the ability to apply the \code{capnet()
     R> head(coef(walk_fit))
 \end{CodeInput}
 \begin{CodeOutput}
-           intercept        X1        X2          X3 X4 X5       X6
-    [1,] -0.05641649 0.6125209 0.7419803 -0.05551362  0  0 1.259265
-    [2,] -0.06131368 0.6086554 0.7330080 -0.05157296  0  0 1.203195
-    [3,] -0.05254245 0.6097964 0.7376851 -0.04832572  0  0 1.263657
-    [4,] -0.05254271 0.6097953 0.7377003 -0.04832469  0  0 1.263657
-    [5,] -0.05698816 0.6092069 0.7353257 -0.04996770  0  0 1.233013
-    [6,] -0.05254276 0.6097992 0.7376832 -0.04832585  0  0 1.263656
-                X7 X8        X9       X10
-    [1,] 0.5393099  0 -1.142731 -1.635969
-    [2,] 0.5306406  0 -1.189979 -1.625752
-    [3,] 0.5305039  0 -1.194957 -1.630794
-    [4,] 0.5305081  0 -1.194946 -1.630793
-    [5,] 0.5305765  0 -1.192422 -1.628245
-    [6,] 0.5305039  0 -1.194958 -1.630792
+           intercept        X1        X2          X3 X4           X5
+    [1,] -0.07092971 0.6206181 0.7567714 -0.08135221  0 0.0191359416
+    [2,] -0.09194094 0.6036988 0.7178425 -0.06398691  0 0.0198231921
+    [3,] -0.05254178 0.6097949 0.7376864 -0.04832460  0 0.0000000000
+    [4,] -0.05254271 0.6097953 0.7377003 -0.04832469  0 0.0000000000
+    [5,] -0.07510560 0.6068512 0.7256562 -0.05669555  0 0.0001585449
+    [6,] -0.05254300 0.6098019 0.7376904 -0.04832608  0 0.0000000000
+               X6        X7 X8         X9       X10
+    [1,] 1.241932 0.5696989  0 -0.9638288 -1.652826
+    [2,] 1.000063 0.5321632  0 -1.1705826 -1.608378
+    [3,] 1.263657 0.5305014  0 -1.1949565 -1.630794
+    [4,] 1.263657 0.5305081  0 -1.1949460 -1.630793
+    [5,] 1.108170 0.5308570  0 -1.1821459 -1.617821
+    [6,] 1.263647 0.5305025  0 -1.1949605 -1.630791
 \end{CodeOutput}
 \end{CodeChunk}
 
@@ -495,12 +495,12 @@ The \code{walk_capnet()} function offers the ability to apply the \code{capnet()
 \end{CodeInput}
 \begin{CodeOutput}
           prediction
-    [15,]  2.5351305
-    [16,]  0.9889227
-    [17,]  0.4888892
-    [18,] -2.8288240
-    [19,]  1.7305624
-    [20,] -0.4447762
+    [15,]  2.2893429
+    [16,]  1.0060748
+    [17,]  0.6376098
+    [18,] -2.5740850
+    [19,]  1.7305351
+    [20,] -0.4447813
 \end{CodeOutput}
 \end{CodeChunk}
 
