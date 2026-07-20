@@ -34,9 +34,16 @@
 #' @param K Integer \eqn{\ge 2}; number of folds used when \code{splits} is
 #'  \code{NULL}. Default \code{5}. If \code{splits} is provided, \code{K} is
 #'  set to \code{length(unique(splits))}.
-#' @param metric Character string; CV scoring metric: \code{"mse"} (lower is 
+#' @param metric Character string; CV scoring metric: \code{"mse"} (lower is
 #'  better) or \code{"rsq"} (higher is better). Default chosen based on fitted model type.
 #' @param verbose Integer; \code{0} for silent, \code{1} to print progress.
+#' @param parallel Logical; if \code{TRUE}, the \code{(fold, alpha)} grid is
+#'  dispatched across a \code{parallel::makeCluster()} PSOCK cluster via
+#'  \code{parallel::parLapply()}. The \code{lambda} path within each
+#'  \code{(fold, alpha)} pair is always fit sequentially, warm-starting from
+#'  the previous \code{lambda}. Default \code{FALSE}.
+#' @param workers Optional integer; number of parallel workers to use when
+#'  \code{parallel = TRUE}. Defaults to \code{parallel::detectCores() - 1}.
 #' @param ... Additional arguments forwarded to \code{capnet()}, e.g.,
 #'  \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit}.
 #' 
@@ -94,10 +101,12 @@ cv_capnet <- function(X, y,
                       multiplier = 1,
                       intercept = TRUE,
                       standardize = TRUE, 
-                      splits = NULL, 
+                      splits = NULL,
                       K = 5,
                       metric = c("mse", "rsq", "logloss", "brier", "deviance"),
                       verbose = 0,
+                      parallel = FALSE,
+                      workers = NULL,
                       ...) {
   metric <- match.arg(metric)
   
@@ -145,56 +154,81 @@ cv_capnet <- function(X, y,
     )
   )
   
-  for (fold in seq_len(K)){
-    if (verbose >= 1) message("Fold", split, "/", K)
-    
+  # Precompute per-fold contexts once; shared read-only across that fold's
+  # alpha tasks below.
+  fold_contexts <- lapply(seq_len(K), function(fold) {
     idx_train <- which(splits != fold)
     idx_test <- which(splits == fold)
-    
-    X_test <- spec$X[idx_test, , drop = FALSE]
-    y_test <- spec$y[idx_test]
-    
-    train_fold <- .capnet_standardize_train(spec, idx_train = idx_train)
-    
-    cap_fold <- .capnet_cap_context(spec)
-    
-    par0_by_alpha <- NULL
-    
-    for (a in seq_along(alpha)) {
-      par0 <- train_fold$par
-      if (!is.null(par0_by_alpha)) par0 <- par0_by_alpha
-      
-      for (l in seq_along(lambda)) {
-        train_run <- train_fold
-        train_run$par <- par0
-        
-        params <- list(alpha = alpha[a], lambda = lambda[l], gamma = gamma)
-        
-        fit <- tryCatch(
-          .capnet_fit(train_run, cap_fold, params),
-          error = function(e) NULL
-        )
-        
-        if (is.null(fit)) {
-          warning(sprintf(
-            "cv_capnet: failed (fold=%d, alpha=%.3f, lambda=%.4g); storing NA.",
-            fold, alpha[a], lambda[l]
-          ))
-          next
-        }
-        
-        model <- .capnet_output(train_fold, cap_fold, fit, params)
-        
-        preds <- predict(model, newdata = X_test, type = "response")
-        err <- .cv_capnet_error(y_test, preds, train_fold$family, metric)
-        cv_errors[a, l, fold] <- err
-        
-        par0 <- c(fit$a0, fit$beta)
-      }
-      par0_by_alpha <- par0
-    }
+
+    list(
+      fold = fold,
+      X_test = spec$X[idx_test, , drop = FALSE],
+      y_test = spec$y[idx_test],
+      train_fold = .capnet_standardize_train(spec, idx_train = idx_train),
+      cap_fold = .capnet_cap_context(spec)
+    )
+  })
+
+  # (fold, alpha) pairs are independent; the lambda path within each pair is
+  # warm-started sequentially (lambda to lambda), same as before.
+  tasks <- unlist(lapply(seq_len(K), function(fold) {
+    lapply(seq_along(alpha), function(a) list(fold = fold, a = a))
+  }), recursive = FALSE)
+
+  if (verbose >= 1) {
+    message(sprintf("cv_capnet: fitting %d (fold x alpha) tasks...", length(tasks)))
   }
-  
+
+  run_task <- function(task) {
+    fc <- fold_contexts[[task$fold]]
+    train_fold <- fc$train_fold
+    cap_fold <- fc$cap_fold
+    a <- task$a
+
+    errs <- rep(NA_real_, length(lambda))
+    par0 <- train_fold$par
+
+    for (l in seq_along(lambda)) {
+      train_run <- train_fold
+      train_run$par <- par0
+
+      params <- list(alpha = alpha[a], lambda = lambda[l], gamma = gamma)
+
+      fit <- tryCatch(
+        .capnet_fit(train_run, cap_fold, params),
+        error = function(e) NULL
+      )
+
+      if (is.null(fit)) {
+        warning(sprintf(
+          "cv_capnet: failed (fold=%d, alpha=%.3f, lambda=%.4g); storing NA.",
+          fc$fold, alpha[a], lambda[l]
+        ))
+        next
+      }
+
+      model <- .capnet_output(train_fold, cap_fold, fit, params)
+
+      preds <- predict(model, newdata = fc$X_test, type = "response")
+      errs[l] <- .cv_capnet_error(fc$y_test, preds, train_fold$family, metric)
+
+      par0 <- c(fit$a0, fit$beta)
+    }
+
+    list(fold = fc$fold, a = a, errs = errs)
+  }
+
+  results <- .capnet_lapply(
+    tasks,
+    run_task,
+    parallel = parallel,
+    workers = workers
+  )
+
+  for (res in results) {
+    cv_errors[res$a, , res$fold] <- res$errs
+  }
+
   mean_errors <- apply(cv_errors, c(1, 2), mean, na.rm = TRUE)
   
   if (metric == "mse") {

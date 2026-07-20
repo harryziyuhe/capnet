@@ -31,8 +31,14 @@
 #' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
 #'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
 #' @param gamma Nonnegative numeric scalar; strength of the contribution-cap penalty.
-#' @param max_gamma_tries Optional numeric scalar; maximum number of tries of different 
+#' @param max_gamma_tries Optional numeric scalar; maximum number of tries of different
 #'  gamma values for convergence. See \link[=walk_capnet]{Details}.
+#' @param parallel Logical; if \code{TRUE}, walk-forward steps are dispatched
+#'  across a \code{parallel::makeCluster()} PSOCK cluster via
+#'  \code{parallel::parLapply()}. Each step fits independently, so this does
+#'  not change results. Default \code{FALSE}.
+#' @param workers Optional integer; number of parallel workers to use when
+#'  \code{parallel = TRUE}. Defaults to \code{parallel::detectCores() - 1}.
 #' @param ... Additional arguments used in fitting. See [capnet()] for more details.
 #' 
 #' @return An object of class \code{"walk_capnet"} with components:
@@ -78,6 +84,8 @@ walk_capnet <- function(X, y, L, z,
                         alpha = 0,
                         gamma = 0,
                         max_gamma_tries = 6,
+                        parallel = FALSE,
+                        workers = NULL,
                         ...) {
   
   # Stop if there is any NA values in data
@@ -107,53 +115,80 @@ walk_capnet <- function(X, y, L, z,
   contributions <- matrix(NA_real_, nrow = m, ncol = p)
   
   fitpoints <- unique(c(seq(1, m, by = walk), m + 1))
-  
-  for (i in seq_len(length(fitpoints) - 1L)) {
+
+  # Each walk-forward step fits independently from the shared `train` object
+  # (no warm start carried between steps), so steps can run in parallel.
+  run_step <- function(i) {
     start_row <- fitpoints[i]
     end_row <- fitpoints[i + 1L]
     idx_cap <- start_row:(end_row - 1L)
-    m <- length(idx_cap)
-    
+    m_i <- length(idx_cap)
+
     cap <- .capnet_cap_context(spec, idx_cap = idx_cap)
-    
+
     gamma_try <- gamma
     fit <- NULL
     for (k in seq_len(max_gamma_tries)) {
       params <- list(alpha = alpha, lambda = lambda, gamma = gamma_try)
-      
+
       fit_k <- tryCatch(
         .capnet_fit(train, cap, params),
         error = function(e) NULL
       )
-      
+
       if (!is.null(fit_k) && (fit_k$convergence >= 0)) {
         fit <- fit_k
         break
       }
-      
+
       gamma_try <- gamma_try / 10
     }
-    
+
     if (is.null(fit)) {
       warning(sprintf(
         "walk_capnet: failed to converge for cap slice [%d, %d]; storing NA outputs.",
         start_row, end_row - 1L
       ))
+      return(list(idx_cap = idx_cap, ok = FALSE))
+    }
+
+    model <- .capnet_output(train, cap, fit, params)
+
+    list(
+      idx_cap = idx_cap,
+      ok = TRUE,
+      a0 = model$a0,
+      gamma = gamma_try,
+      beta = model$beta,
+      feature_contributions = model$feature_contributions,
+      m_i = m_i
+    )
+  }
+
+  step_results <- .capnet_lapply(
+    seq_len(length(fitpoints) - 1L),
+    run_step,
+    parallel = parallel,
+    workers = workers
+  )
+
+  for (res in step_results) {
+    idx_cap <- res$idx_cap
+
+    if (!res$ok) {
       intercepts[idx_cap] <- NA_real_
       predictions[idx_cap] <- NA_real_
       gamma_values[idx_cap] <- NA_real_
       next
     }
-    
-    model <- .capnet_output(train, cap, fit, params)
-    
-    intercepts[idx_cap] <- model$a0
-    gamma_values[idx_cap] <- gamma_try
-    betas[idx_cap, ] <- matrix(rep(model$beta, m), nrow = m, byrow = TRUE)
-    contributions[idx_cap, ] <- model$feature_contributions
-    predictions[idx_cap] <- rowSums(model$feature_contributions) + model$a0
+
+    intercepts[idx_cap] <- res$a0
+    gamma_values[idx_cap] <- res$gamma
+    betas[idx_cap, ] <- matrix(rep(res$beta, res$m_i), nrow = res$m_i, byrow = TRUE)
+    contributions[idx_cap, ] <- res$feature_contributions
+    predictions[idx_cap] <- rowSums(res$feature_contributions) + res$a0
   }
-  
+
   if (xts::is.xts(z)) {
     ord <- zoo::index(z)
     
