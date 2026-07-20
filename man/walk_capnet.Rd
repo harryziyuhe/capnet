@@ -18,6 +18,8 @@ walk_capnet(
   alpha = 0,
   gamma = 0,
   max_gamma_tries = 6,
+  parallel = FALSE,
+  workers = NULL,
   ...
 )
 }
@@ -58,6 +60,14 @@ advancing the window. Default \code{1}.}
 
 \item{max_gamma_tries}{Optional numeric scalar; maximum number of tries of different
 gamma values for convergence. See \link[=walk_capnet]{Details}.}
+
+\item{parallel}{Logical; if \code{TRUE}, walk-forward steps are dispatched
+across a \code{parallel::makeCluster()} PSOCK cluster via
+\code{parallel::parLapply()}. Each step fits independently, so this does
+not change results. Default \code{FALSE}.}
+
+\item{workers}{Optional integer; number of parallel workers to use when
+\code{parallel = TRUE}. Defaults to \code{parallel::detectCores() - 1}.}
 
 \item{...}{Additional arguments used in fitting. See \code{\link[=capnet]{capnet()}} for more details.}
 }
