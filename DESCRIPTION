@@ -1,8 +1,8 @@
 Package: capnet
 Type: Package
 Title: Contribution-Capped Elastic Net Model for Stable Feature Contributions
-Version: 0.2.0
-Date: 2025-11-03
+Version: 0.3.0
+Date: 2026-07-20
 Authors@R:
     c(
         person("Harry", "He", email = "zih028@ucsd.edu", role = c("aut", "cre")),
@@ -20,7 +20,8 @@ Imports:
     xts,
     zoo,
     Matrix,
-    stats
+    stats,
+    parallel
 Suggests:
     knitr,
     rmarkdown,
