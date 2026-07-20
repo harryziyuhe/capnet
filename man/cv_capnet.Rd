@@ -20,6 +20,8 @@ cv_capnet(
   K = 5,
   metric = c("mse", "rsq", "logloss", "brier", "deviance"),
   verbose = 0,
+  parallel = FALSE,
+  workers = NULL,
   ...
 )
 }
@@ -69,6 +71,15 @@ set to \code{length(unique(splits))}.}
 better) or \code{"rsq"} (higher is better). Default chosen based on fitted model type.}
 
 \item{verbose}{Integer; \code{0} for silent, \code{1} to print progress.}
+
+\item{parallel}{Logical; if \code{TRUE}, the \code{(fold, alpha)} grid is
+dispatched across a \code{parallel::makeCluster()} PSOCK cluster via
+\code{parallel::parLapply()}. The \code{lambda} path within each
+\code{(fold, alpha)} pair is always fit sequentially, warm-starting from
+the previous \code{lambda}. Default \code{FALSE}.}
+
+\item{workers}{Optional integer; number of parallel workers to use when
+\code{parallel = TRUE}. Defaults to \code{parallel::detectCores() - 1}.}
 
 \item{...}{Additional arguments forwarded to \code{capnet()}, e.g.,
 \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit}.}
