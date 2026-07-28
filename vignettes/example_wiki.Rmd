@@ -1,0 +1,333 @@
+---
+title: "Web Traffic Model Example"
+author: "Harry He"
+date: "2026-07-26"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Web Traffic Model Example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+### Purpose of vignette
+
+This vignette illustrates `capnet` in a domain other than finance: forecasting
+daily aggregate Wikipedia traffic from a panel of individual, heavy-tailed
+article-level pageview series. Article popularity on the web is famously
+Zipf/heavy-tailed -- a small number of articles can go "viral" and receive
+orders of magnitude more traffic than usual on a given day. A linear (here,
+Poisson) forecasting model that regresses tomorrow's site-wide traffic on
+today's per-article pageviews is exactly the setting `capnet` targets: without
+a contribution cap, a single freak spike in one article's traffic can swamp
+the forecast, even though the underlying coefficient is not unusually large
+under a standard elastic-net fit.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Core package (required)
+library(capnet)
+
+# Optional packages for vignette
+needed <- c(
+  "glmnet", "lbfgs", "ggplot2",
+  "dplyr", "tidyr", "purrr", "lubridate", "zoo"
+)
+
+missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
+
+if (length(missing) > 0) {
+  knitr::opts_chunk$set(eval = FALSE)
+  message(
+    "Optional packages not installed: ",
+    paste(missing, collapse = ", "),
+    ". Code chunks will not be evaluated."
+  )
+} else {
+  library(glmnet)
+  library(lbfgs)
+  library(ggplot2)
+  library(dplyr)
+  library(tidyr)
+  library(purrr)
+  library(lubridate)
+  library(zoo)
+}
+
+if (length(missing) == 0) {
+  source("helpers.R", local = knitr::knit_global())
+}
+```
+
+### Data
+
+The dataset (`inst/extdata/wiki_traffic.csv`) contains daily English Wikipedia
+pageviews (2022-01-01 to 2024-12-31) for 30 widely-read articles (major tech
+companies, AI/crypto topics, and prominent public figures), pulled from the
+public Wikimedia Pageviews REST API. The response is *next-day* total
+pageviews summed across all 30 articles; the covariates are *today's*
+per-article pageviews (in thousands of views, for numerical scaling). The
+`total` column is dropped from the covariate set since it is an exact linear
+combination of the 30 article columns.
+
+```{r data, result="asis"}
+wiki <- read.csv(system.file("extdata", "wiki_traffic.csv", package = "capnet"))
+wiki$date <- as.Date(wiki$date)
+
+articles <- setdiff(names(wiki), c("date", "total"))
+
+wiki <- wiki |>
+  arrange(date) |>
+  mutate(target = dplyr::lead(total, 1)) |>
+  filter(!is.na(target)) |>
+  mutate(across(all_of(articles), ~ . / 1000)) |>   # thousands of views
+  select(date, target, all_of(articles))
+
+print(calc_moments(wiki[, articles]))
+```
+
+The summary statistics show pronounced positive excess kurtosis for several
+articles (e.g. `sam_altman`, `elon_musk`, `nvidia`), confirming that a handful
+of articles experience occasional traffic spikes far outside their typical
+range -- precisely the covariate behavior contribution caps are designed to
+control.
+
+### Backtest
+
+We forecast next-day total pageviews with a Poisson log-link model, using a
+rolling one-year training window refit monthly (steps of 5 days within each
+month, to keep runtime moderate) and evaluated out-of-sample from 2023-01-01
+through 2024-12-31. Refit months are independent of one another, so
+`rolling_enet()` dispatches them across CPU cores via `parallel = TRUE`.
+Because Poisson deviance scales with the (very large) raw
+pageview counts, we set `alpha = 0` and forgo elastic-net selection entirely
+(`lambda = 0`) so that the comparison isolates the effect of the contribution
+cap alone, exactly mirroring the role `gamma` plays in the finance example.
+
+Contribution ceilings are computed the same way as in the finance vignette:
+as a multiple of each feature's univariate regression coefficient with the
+response, here using a univariate Poisson GLM slope (the natural analogue of
+the OLS slope used for the Gaussian model) rather than the raw correlation.
+
+```{r experiment}
+wiki_L <- function(train_use, target_col, feature_cols, y_train) {
+  sapply(feature_cols, function(v) {
+    uni <- suppressWarnings(
+      stats::glm(train_use[[target_col]] ~ train_use[[v]], family = "poisson")
+    )
+    3 * abs(stats::coef(uni)[2])
+  })
+}
+
+results <- rolling_enet(
+  wiki,
+  date_col = "date",
+  target_col = "target",
+  alpha = 0,
+  window_years = 1,
+  method = c("capnet_walk", "capnet", "postcap"),
+  capnet_gamma = c(0),
+  walk_gamma = c(10, 100, 1000, 10000, 100000),
+  min_obs = 200,
+  eval_start = "2023-01-01",
+  family = "poisson",
+  cap_formula = wiki_L,
+  lambda_override = 0,
+  walk = 5,
+  parallel = TRUE
+)
+
+combos <- results$predictions %>%
+  dplyr::distinct(method, gamma) %>%
+  dplyr::arrange(method, gamma)
+
+predictions <- list()
+contributions <- list()
+methods <- c()
+gamma_vals <- c()
+
+for (i in seq_len(nrow(combos))) {
+  m <- combos$method[i]
+  gamma_j <- combos$gamma[i]
+
+  predictions[[i]] <- results$predictions %>%
+    dplyr::filter(method == m, gamma == gamma_j)
+  contributions[[i]] <- results$contributions %>%
+    dplyr::filter(method == m, gamma == gamma_j)
+  methods[i] <- m
+  gamma_vals[i] <- gamma_j
+}
+```
+
+```{r summary, echo = FALSE}
+summary_table <- lapply(seq_along(methods), function(i) {
+  tibble::tibble(
+    method = methods[i],
+    gamma = ifelse(gamma_vals[i] == 0, NA_real_, gamma_vals[i]),
+    oos_r2 = calc_oos_r2(predictions[[i]], date_col = "date")
+  )
+}) |>
+  dplyr::bind_rows()
+
+print(summary_table)
+```
+
+The uncapped Poisson model is catastrophically unstable out-of-sample: with
+30 correlated daily-traffic covariates and no regularization, it occasionally
+produces an enormous predicted count when a covariate combination lands far
+outside the training distribution, driving its out-of-sample pseudo-R^2 deeply
+negative. Post-fit capping clips the worst contributions after the fact but
+does not let the coefficients adjust, so it remains unstable (pseudo-R^2 still
+negative). The walk-forward `capnet` model, which incorporates the
+contribution cap directly into estimation, is dramatically more stable across
+the entire range of `gamma` values tested and is the only approach with a
+positive out-of-sample pseudo-R^2.
+
+```{r fig.height = 6.5, fig.width = 10, echo = FALSE}
+best_gamma <- summary_table |>
+  dplyr::filter(method == "Walk-forward Capnet") |>
+  dplyr::slice_max(oos_r2, n = 1) |>
+  dplyr::pull(gamma)
+
+sel <- which(
+  (methods == "Post-Fit Cap") |
+  (methods == "Uncapped") |
+  (methods == "Walk-forward Capnet" & gamma_vals == best_gamma)
+)
+
+rolling_list <- lapply(sel, function(i) {
+  df <- rolling_oos_r2(predictions[[i]], window = 180, date_col = "date") |>
+    tidyr::drop_na()
+  df$spec <- paste0(
+    methods[i],
+    ifelse(gamma_vals[i] == 0, "", paste0(" (gamma=", gamma_vals[i], ")"))
+  )
+  df
+})
+
+plot_df <- dplyr::bind_rows(rolling_list) %>%
+  dplyr::mutate(date = as.Date(date))
+
+walk_label <- paste0("Walk-forward Capnet (gamma=", best_gamma, ")")
+
+ggplot(plot_df, aes(x = date, y = r2_roll, color = spec, group = spec)) +
+  geom_line(linewidth = 0.8, alpha = 0.9) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+  scale_color_manual(values = setNames(
+    c("steelblue", "firebrick", "darkolivegreen4"),
+    c("Uncapped", "Post-Fit Cap", walk_label)
+  )) +
+  scale_x_date(date_breaks = "3 months", date_labels = "%Y-%m") +
+  coord_cartesian(ylim = c(-3, 1)) +
+  labs(
+    x = "Date", y = expression(R^2), color = "Model",
+    caption = sprintf(
+      "Y-axis truncated for readability; Uncapped's rolling R^2 reaches a minimum of %.0f.",
+      min(plot_df$r2_roll[plot_df$spec == "Uncapped"])
+    )
+  ) +
+  theme_bw(base_size = 16) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 0)
+  )
+```
+
+```{r fig.height = 6.5, fig.width = 10, echo = FALSE}
+ref <- contributions[[sel[1]]]
+feat_start <- which(names(ref) == "lambda") + 1
+max_col_idx <- max.col(abs(ref[, feat_start:ncol(ref)]), ties.method = "first")
+
+max_contributions <- lapply(sel, function(i) {
+  df <- contributions[[i]]
+  mat <- as.matrix(df)
+  max_col <- as.numeric(mat[cbind(seq_len(nrow(mat)), max_col_idx + feat_start - 1)])
+  df <- df[, 1:(feat_start - 1)]
+  df$max_col <- max_col
+  df$spec <- paste0(
+    methods[i],
+    ifelse(gamma_vals[i] == 0, "", paste0(" (gamma=", gamma_vals[i], ")"))
+  )
+  df
+})
+
+plot_df <- dplyr::bind_rows(max_contributions) %>%
+  dplyr::mutate(date = as.Date(date))
+
+ggplot(plot_df, aes(x = date, y = max_col, color = spec, group = spec)) +
+  geom_line(linewidth = 0.8, alpha = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+  scale_color_manual(values = setNames(
+    c("steelblue", "firebrick", "darkolivegreen4"),
+    c("Uncapped", "Post-Fit Cap", walk_label)
+  )) +
+  scale_x_date(date_breaks = "3 months", date_labels = "%Y-%m") +
+  labs(x = "Date", y = "Maximum |contribution| (log-mean scale)", color = "Model") +
+  theme_bw(base_size = 16) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 0)
+  )
+```
+
+The maximum-contribution series shows the mechanism behind the stability
+difference: the uncapped model occasionally lets a single article's lagged
+pageviews swing the log-mean forecast by several units (a multiplicative
+factor of $e^{|\cdot|}$ on the predicted count -- catastrophic for a Poisson
+mean), while the walk-forward `capnet` model keeps this quantity close to the
+cap throughout, redistributing predictive weight across the panel instead of
+concentrating it in one article.
+
+### Contribution redistribution snapshot
+
+```{r, include = FALSE}
+make_feature_table <- function(df_list, target_date, df_names = NULL,
+                                feature_cols) {
+  if (is.null(df_names)) {
+    df_names <- paste0("df", seq_along(df_list))
+  }
+
+  long_list <- lapply(seq_along(df_list), function(i) {
+    df_list[[i]] %>%
+      dplyr::filter(date == target_date) %>%
+      dplyr::select(dplyr::all_of(feature_cols)) %>%
+      tidyr::pivot_longer(
+        cols = dplyr::everything(),
+        names_to = "feature",
+        values_to = df_names[i]
+      )
+  })
+
+  out <- Reduce(function(x, y) dplyr::left_join(x, y, by = "feature"), long_list)
+  as.data.frame(out)
+}
+```
+
+`2023-03-14` is the single day responsible for the uncapped model's worst
+out-of-sample blowup: a spike in `youtube`'s lagged pageviews (relative to
+that fit's training distribution) pushes its uncapped log-mean contribution
+far above any other feature, producing an implausible next-day forecast.
+
+```{r contrib_table, result="asis"}
+tab <- make_feature_table(
+  df_list = list(contributions[[which(methods == "Uncapped")[1]]],
+                 contributions[[which(methods == "Post-Fit Cap")[1]]],
+                 contributions[[sel[length(sel)]]]),
+  target_date = as.Date("2023-03-14"),
+  df_names = c("Uncapped", "Post-Fit Cap", walk_label),
+  feature_cols = articles
+)
+
+print(tab)
+```
+
+As in the finance example, the post-fit approach truncates the offending
+contribution mechanically without adjusting any other coefficient, while the
+walk-forward `capnet` model redistributes weight across multiple articles,
+reflecting a genuinely re-estimated (rather than post-hoc clipped) fit.
