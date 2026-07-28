@@ -19,7 +19,12 @@ simulate_capnet_data(
   unstable_frac = 0.2,
   sigma_low = 1,
   sigma_high = 8,
-  high_prob = 0.1
+  high_prob = 0.1,
+  family = c("gaussian", "binomial", "poisson", "gamma"),
+  poisson_mean = 10,
+  gamma_mean = 10,
+  gamma_shape = 2,
+  binomial_prob = 0.5
 )
 }
 \arguments{
@@ -39,7 +44,8 @@ in \code{beta_true}. Default \code{0.7}}
 \item{beta_range}{Numeric length-2; uniform range for nonzero \code{beta_true}
 entries. Default \code{c(-2, 2)}.}
 
-\item{sigma}{Positive numeric; noise sd for \code{y}. Default \code{1}.}
+\item{sigma}{Positive numeric; noise sd for \code{y}. Only used when
+\code{family = "gaussian"}. Default \code{1}.}
 
 \item{seed}{Optional integer for reproducibility. Default \code{NULL}.}
 
@@ -62,6 +68,33 @@ features. Default \code{8}.}
 
 \item{high_prob}{Numeric in \eqn{[0,1]}; per-row probability an unstable
 feature uses \code{sigma_high}. Default \code{0.10}.}
+
+\item{family}{Character; response family, one of \code{"gaussian"},
+\code{"binomial"}, \code{"poisson"}, or \code{"gamma"}. Default
+\code{"gaussian"}. Only supported in \code{mode = "basic"};
+\code{mode = "proxy"} always generates a Gaussian response, since that
+mode's measurement-error structure is orthogonal to response family. For
+every non-Gaussian family, the slope part of the linear predictor,
+\code{X \%*\% beta_true}, is rescaled to unit standard deviation and
+\code{beta_true} is updated to match, then a data-generating intercept
+(not returned, analogous to the \code{a0} that \code{capnet()} fits
+internally) shifts the linear predictor so the response's mean matches
+\code{poisson_mean}/\code{gamma_mean}/\code{binomial_prob} as applicable.
+This keeps the response in a numerically sane range regardless of
+\code{p} or \code{beta_range}.}
+
+\item{poisson_mean}{Positive numeric; target average response when
+\code{family = "poisson"}. Default \code{10}.}
+
+\item{gamma_mean}{Positive numeric; target average response when
+\code{family = "gamma"}. Default \code{10}.}
+
+\item{gamma_shape}{Positive numeric; fixed Gamma shape parameter used when
+\code{family = "gamma"} (rate is set to \code{gamma_shape / mu} so the
+mean is \code{mu}). Default \code{2}.}
+
+\item{binomial_prob}{Numeric in \eqn{(0,1)}; target average success
+probability when \code{family = "binomial"}. Default \code{0.5}.}
 }
 \value{
 A list with the following components:
@@ -91,9 +124,15 @@ the same data-generating process and ready to pass as the \code{z} argument of
 }
 \details{
 In \strong{basic} mode, nonzeros in \code{beta_true} are placed uniformly at
-random and drawn from \code{runif(beta_range[1], beta_range[2])}. The suggested
-caps are \code{L_j = pmax(|beta_true_j|, 0.1)} as a simple starting point.
-When \code{m > 0}, \code{Z} is an \eqn{m \times p} matrix of i.i.d. standard
+random and drawn from \code{runif(beta_range[1], beta_range[2])}. When
+\code{family = "gaussian"}, \code{y = X \%*\% beta_true + N(0, sigma^2)}.
+For the other families (see the rescaling description under the
+\code{family} argument above), \code{y ~ Poisson(exp(eta))} for
+\code{"poisson"}, \code{y ~ Gamma(shape = gamma_shape, rate = gamma_shape /
+exp(eta))} for \code{"gamma"}, and \code{y ~ Bernoulli(plogis(eta))} for
+\code{"binomial"}. In all cases, the suggested caps are
+\code{L_j = pmax(|beta_true_j|, 0.1)} as a simple starting point. When
+\code{m > 0}, \code{Z} is an \eqn{m \times p} matrix of i.i.d. standard
 normal draws from the same pool as \code{X}.
 
 In \strong{proxy} mode, \code{y = X^* \%*\% beta_true + N(0, sigma^2)} and
@@ -113,6 +152,18 @@ simulating data under \code{mode = "proxy"}.
 set.seed(42)
 d_basic <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5)
 names(d_basic)  # includes Z
+
+d_pois <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
+                                family = "poisson", poisson_mean = 15)
+range(d_pois$y)
+
+d_binom <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
+                                 family = "binomial", binomial_prob = 0.3)
+table(d_binom$y)
+
+d_gamma <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
+                                 family = "gamma", gamma_mean = 5)
+range(d_gamma$y)
 
 d_proxy <- simulate_capnet_data(mode = "proxy", n = 300, p = 8, m = 50,
                                 sparsity = 0.6, unstable_frac = 0.25,
