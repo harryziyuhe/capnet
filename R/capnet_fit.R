@@ -40,10 +40,7 @@
 
     feature_contribution <- sweep(sweep(newx, 2, beta_raw, "*"), 1, cap$multiplier, "*")
     excess_contribution <- sweep(
-      sweep(
-        pmax(sweep(abs(feature_contribution), 2, cap$L, "-"), 0),
-        2, train$scaling_factor, "*"
-      ),
+      pmax(sweep(abs(feature_contribution), 2, cap$L, "-"), 0),
       1, cap$multiplier, "/"
     )
     excess_penalty <- sum(excess_contribution ^ 2) / m
@@ -68,21 +65,23 @@
     gradient_rest <- gradient_rest + (1 - params$alpha) * params$lambda * beta_rest
     
     # Contribution cap gradient
-    # Because contribution cap penalty is calculated in the original scale,
-    # so if the data is standardized, scaling factors also show up in the gradient
-    
+    # The optimizer operates on standardized beta_rest, but the cap penalty is
+    # evaluated on raw-scale contributions (beta_raw = beta_rest / scaling_factor).
+    # By the chain rule, d(beta_raw_j)/d(beta_rest_j) = 1 / scaling_factor_j, so
+    # that factor is applied once, at the end, to the raw-scale gradient below.
+
     m <- nrow(newx)
     beta_raw <- beta_rest / train$scaling_factor
 
     feature_contribution <- sweep(sweep(newx, 2, beta_raw, "*"), 1, cap$multiplier, "*")
     excess_contribution <- sweep(
-      sweep(
-        pmax(sweep(abs(feature_contribution), 2, cap$L, "-"), 0),
-        2, train$scaling_factor, "*"
-      ),
+      pmax(sweep(abs(feature_contribution), 2, cap$L, "-"), 0),
       1, cap$multiplier, "/"
     )
-    d_excess <- excess_contribution * sign(feature_contribution) * newx
+    d_excess <- sweep(
+      excess_contribution * sign(feature_contribution) * newx,
+      2, train$scaling_factor, "/"
+    )
     gradient_cap <- (2 * params$gamma / m) * colSums(d_excess)
 
     gradient_rest <- gradient_rest + gradient_cap

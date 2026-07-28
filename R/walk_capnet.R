@@ -49,8 +49,9 @@
 #'  \item{\code{feature_contributions}}{Numeric matrix of shape 
 #'    \eqn{S\times p} giving per-row, per-feature contributions 
 #'    stacked across all evaluation rows in order of prediction.}
-#'  \item{\code{predictions}}{Numeric matrix of out-of-sample predictions for 
-#'    the evaluation rows; shape \eqn{S\times p}.}
+#'  \item{\code{predictions}}{Numeric matrix of out-of-sample predictions for
+#'    the evaluation rows, on the response scale (i.e. \code{family$linkinv(eta)});
+#'    shape \eqn{S\times p}.}
 #'  \item{\code{gammas}}{Numeric vector of length \eqn{n_\mathrm{new}} for the 
 #'    \code{gamma} used at each step.}
 #' 
@@ -136,7 +137,12 @@ walk_capnet <- function(X, y, L, z,
         error = function(e) NULL
       )
 
-      if (!is.null(fit_k) && (fit_k$convergence >= 0)) {
+      # -1001 is libLBFGS's LBFGSERR_ROUNDING_ERROR: the line search could not
+      # find further improvement to floating-point precision. This is a benign
+      # near-convergence stop (not divergence) and is common on problems with
+      # highly collinear features; treat it as an acceptable fit rather than
+      # retrying with a smaller gamma.
+      if (!is.null(fit_k) && (fit_k$convergence >= 0 || fit_k$convergence == -1001)) {
         fit <- fit_k
         break
       }
@@ -186,7 +192,8 @@ walk_capnet <- function(X, y, L, z,
     gamma_values[idx_cap] <- res$gamma
     betas[idx_cap, ] <- matrix(rep(res$beta, res$m_i), nrow = res$m_i, byrow = TRUE)
     contributions[idx_cap, ] <- res$feature_contributions
-    predictions[idx_cap] <- rowSums(res$feature_contributions) + res$a0
+    eta <- rowSums(res$feature_contributions) + res$a0
+    predictions[idx_cap] <- train$family$linkinv(eta)
   }
 
   if (xts::is.xts(z)) {

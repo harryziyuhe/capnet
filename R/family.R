@@ -10,8 +10,16 @@ normalize_family <- function(family = NULL) {
   if (is.null(family)) {
     return (stats::gaussian())
   }
-  
+
   if (is.character(family) && length(family) == 1L) {
+    # Special-cased: capnet's Gamma support requires the log link (matching
+    # the loss/gradient implemented in objective_factory.R), but
+    # stats::Gamma() defaults to the inverse link, and there is no
+    # stats::gamma() constructor for get() to find (only the unrelated
+    # base::gamma() special function, under a different name lookup).
+    if (identical(tolower(family), "gamma")) {
+      return(stats::Gamma(link = "log"))
+    }
     fam_fun <- get(family, envir = asNamespace("stats"), inherits = FALSE)
     fam <- fam_fun()
     .assert_is_family_object(fam)
@@ -69,13 +77,13 @@ validate_family_supported <- function(fam){
   }
   
   if (identical(f, "gamma")) {
-    if (!identical(link, "inverse")) {
-      stop(sprintf("Unsupported Gamma link '%s'. Currently supported: inverse.", fam$link), call. = FALSE)
+    if (!identical(link, "log")) {
+      stop(sprintf("Unsupported Gamma link '%s'. Currently supported: log.", fam$link), call. = FALSE)
     }
     return(invisible(TRUE))
   }
-  
-  stop(sprintf("Unsupported family '%s'. Supported families: gaussian, binomial, poisson.", fam$family), call. = FALSE)
+
+  stop(sprintf("Unsupported family '%s'. Supported families: gaussian, binomial, poisson, Gamma.", fam$family), call. = FALSE)
 }
 
 # ------------------------------------------------------------------------------

@@ -81,7 +81,8 @@ coefficients per step.}
 \eqn{S\times p} giving per-row, per-feature contributions
 stacked across all evaluation rows in order of prediction.}
 \item{\code{predictions}}{Numeric matrix of out-of-sample predictions for
-the evaluation rows; shape \eqn{S\times p}.}
+the evaluation rows, on the response scale (i.e. \code{family$linkinv(eta)});
+shape \eqn{S\times p}.}
 \item{\code{gammas}}{Numeric vector of length \eqn{n_\mathrm{new}} for the
 \code{gamma} used at each step.}
 }
