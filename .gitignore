@@ -50,6 +50,7 @@ rsconnect/
 
 # Claude
 .claude/
+CLAUDE.md
 
 # LaTeX build artifacts
 *.aux
