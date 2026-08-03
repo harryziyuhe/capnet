@@ -33,7 +33,7 @@ devtools::build()
 devtools::build_vignettes()
 ```
 
-The package has no `testthat` suite. The only test utility is `test/check_gradient.R`, which provides `.loss_gradient_check()` for numerical gradient verification against the analytical gradients in `objective_factory.R`.
+Tests live under `tests/testthat/` (run via `devtools::test()`). `tests/testthat/helper-gradient-check.R` provides `.loss_gradient_check()` for numerical gradient verification against the analytical gradients in `objective_factory.R`; `tests/testthat/test-gradients.R` exercises it across all four supported families and includes a regression test for the `capnet_fit.R` contribution-cap gradient scale-invariance bug.
 
 ## Architecture
 
@@ -69,7 +69,7 @@ Every fit goes through this four-step internal pipeline:
 - `gaussian` — identity link, MSE loss
 - `binomial` — logit link, cross-entropy loss (numerically stable via `log1pexp`)
 - `poisson` — log link
-- `Gamma` — log link (note: `validate_family_supported` accepts only `inverse` link for Gamma — there is a discrepancy between `family.R` and `objective_factory.R`)
+- `Gamma` — log link only. `normalize_family()` special-cases the string `"gamma"`/`"Gamma"` to build `stats::Gamma(link = "log")` (bypassing `stats::Gamma()`'s default `inverse` link, which does not match this package's Gamma loss/gradient); `validate_family_supported()` accordingly requires `log` link for Gamma.
 
 ### S3 methods (`methods.R`)
 
