@@ -210,9 +210,9 @@ Each configuration is compared against the unconstrained elastic net benchmark, 
 
 \pkg{Capnet} frequently outperforms the benchmark across most configurations, although excessively restrictive ceilings can degrade performance. Conversely, when ceilings are sufficiently large, the constraint becomes inactive and the solution reduces to the unconstrained elastic net. While the penalty strength affects performance, particularly when contribution ceilings are tight, its influence is generally smaller than that of the ceiling level itself, highlighting the importance of selecting appropriate contribution limits. The walk-forward evaluation approach consistently delivers improved performance and greater stability. This behavior reflects the fact that imposing global contribution constraints over an entire evaluation set can lead to overly aggressive penalization, whereas local, observation-level constraints adapt more flexibly to changing covariate realizations. As discussed further in the software implementation section, the walk-forward approach is generally preferred despite its higher computational cost, particularly when heuristics for selecting contribution ceilings are imperfect.
 
-As a second example, consider an application in quantitative finance. In a medium-frequency market-timing model, a set of covariates is used to forecast excess equity risk premia. Financial covariates are often noisy and heavy-tailed, making it difficult to distinguish meaningful extreme values from noise. A central challenge is to construct a model that captures informative deviations from long-run patterns while maintaining a well-controlled risk profile. This includes limiting the extent to which any single feature can influence the linear predictor, as highly dominant features can create concentration risk and lead to unstable portfolio outcomes. In such settings, contribution caps provide a direct mechanism for controlling feature-level influence while preserving predictive signal. More details are discussed in the \hyperref[sec:examples]{Application} Section.
+As a second example, consider an application in quantitative finance. In a medium-frequency market-timing model, a set of covariates is used to forecast excess equity risk premia. Financial covariates are often noisy and heavy-tailed, making it difficult to distinguish meaningful extreme values from noise. A central challenge is to construct a model that captures informative deviations from long-run patterns while maintaining a well-controlled risk profile. This includes limiting the extent to which any single feature can influence the linear predictor, as highly dominant features can create concentration risk and lead to unstable portfolio outcomes. In such settings, contribution caps provide a direct mechanism for controlling feature-level influence while preserving predictive signal. More details are discussed in Section~\ref{sec:examples-finance}.
 
-As a third example, illustrating that contribution caps are useful well beyond the additive, Gaussian setting of the previous two examples, consider a count-regression model that forecasts aggregate web traffic from a panel of individual, heavy-tailed content-level pageview series. Article-level popularity on the web is well documented to be Zipf-like and heavy-tailed: a small number of pages can go viral and receive orders of magnitude more traffic than usual on a given day. A Poisson log-link model that forecasts tomorrow's site-wide traffic from today's per-article pageviews is exactly the setting \pkg{capnet} targets: without a contribution cap, a single freak spike in one article's traffic can dominate the forecast, even though the associated coefficient need not be unusually large under a standard fit. Because the response enters through a log link in this setting, contribution caps bound a \emph{multiplicative} rather than additive influence on the forecast, as discussed in Section~\ref{sec:framework}. Further details are discussed in Section~\ref{sec:examples-web}.
+The third example illustrates the application of contribution caps beyond the additive, Gaussian setting by considering a count-regression model that forecasts aggregate web traffic from a panel of individual, heavy-tailed content-level pageview series. Article-level popularity on the web is well documented to be Zipf-like and heavy-tailed: a small number of pages can go viral and receive orders of magnitude more traffic than usual on a given day. A Poisson log-link model that forecasts tomorrow's site-wide traffic from today's per-article pageviews provides a setting to demonstrate \pkg{capnet}'s utility. Without a contribution cap, a single freak spike in one article's traffic can dominate the forecast, even though the associated coefficient need not be unusually large under a standard fit. Because the response enters through a log link in this setting, contribution caps bound a \emph{multiplicative} rather than additive influence on the forecast, as discussed in Section~\ref{sec:framework}. Further details are discussed in Section~\ref{sec:examples-web}.
 
 \section{The Contribution-Cap Framework}\label{sec:framework}
 
@@ -531,7 +531,7 @@ The \code{cv_capnet()} function implements grid-search cross-validation and has 
 Similar to the implementation by \code{cv.glmnet()}, \code{cv_capnet()} uses warm start when searching for \code{lambda} values to cut computational costs. The \code{S3} \code{plot()} method displays the cross-validation curve with upper and lower confidence bounds for each $\lambda$ or $\alpha$ value in the regularization path. Example plots using the simulated data are presented in Figure~\ref{fig:cv_lambda}.
 
 \begin{Code}
-    plot(cv_fit1, alpha = 1)
+    R> plot(cv_fit1, alpha = 1)
 \end{Code}
 
 The package also provides diagnostic tools for examining fitted \pkg{capnet} models. The function \code{capnet\_violations()} identifies where realized feature contributions exceed the specified contribution caps. Given a fitted \pkg{capnet} model, it computes the excess contribution for each feature over the evaluation data. If no new evaluation matrix is supplied, the function uses the same evaluation data that were used when fitting the model. The output includes the row and column indices of all cap violations together with the matrix of excess contributions. The corresponding \code{print()} method displays this excess matrix in sparse form.
@@ -574,8 +574,10 @@ The function \code{plot\_redistribution()} compares two fitted \pkg{capnet} mode
 
 \begin{Code}
     R> z_small <- Z[1:5, ]
-    R> fit1 <- capnet(X, y, L, z = z_small, alpha = alpha, lambda = lambda, gamma = 0)
-    R> fit2 <- capnet(X, y, L, z = z_small, alpha = alpha, lambda = lambda, gamma = 10)
+    R> fit1 <- capnet(X, y, L, z = z_small, alpha = alpha, 
+    +    lambda = lambda, gamma = 0)
+    R> fit2 <- capnet(X, y, L, z = z_small, alpha = alpha, 
+    +    lambda = lambda, gamma = 10)
 
     # Side-by-side bar chart comparing feature coefficients and contributions
     R> plot_redistribution(fit1, fit2, plot = "delta")
@@ -590,7 +592,8 @@ Every function illustrated above extends unchanged to the logistic, Poisson, and
 
 \begin{Code}
     R> set.seed(123)
-    R> data_pois <- simulate_capnet_data(n = 100, p = 10, m = 20, family = "poisson")
+    R> data_pois <- simulate_capnet_data(n = 100, p = 10, m = 20,
+    +     family = "poisson")
     R> X <- data_pois$X; y <- data_pois$y; L <- data_pois$L; Z <- data_pois$Z
     R> fit_pois <- capnet(X, y, L, z = Z, family = "poisson", alpha = alpha,
     +    lambda = lambda, gamma = gamma)
@@ -619,16 +622,17 @@ Every function illustrated above extends unchanged to the logistic, Poisson, and
 Because the log link is used, \code{predict(fit\_pois, newdata = Z, type = "response")} returns predictions already exponentiated onto the count scale, and the contribution cap \code{L} bounds the log-mean exactly as described in Section~\ref{sec:framework}. Fitting the logistic or gamma cases is identical apart from the \code{family} argument and the corresponding call to \code{simulate\_capnet\_data()}:
 
 \begin{Code}
-    R> data_bin <- simulate_capnet_data(n = 100, p = 10, m = 20, family = "binomial")
+    R> data_bin <- simulate_capnet_data(n = 100, p = 10, m = 20,
+    +    family = "binomial")
     R> fit_bin <- capnet(data_bin$X, data_bin$y, data_bin$L, z = data_bin$Z,
     +    family = "binomial", alpha = alpha, lambda = lambda, gamma = gamma)
 
-    R> data_gamma <- simulate_capnet_data(n = 100, p = 10, m = 20, family = "gamma")
-    R> fit_gamma <- capnet(data_gamma$X, data_gamma$y, data_gamma$L, z = data_gamma$Z,
-    +    family = "gamma", alpha = alpha, lambda = lambda, gamma = gamma)
+    R> data_gamma <- simulate_capnet_data(n = 100, p = 10, m = 20,
+    +    family = "gamma")
+    R> fit_gamma <- capnet(data_gamma$X, data_gamma$y, data_gamma$L,
+    +    z = data_gamma$Z, family = "gamma", alpha = alpha, lambda = lambda,
+    +    gamma = gamma)
 \end{Code}
-
-A fully worked empirical application of the Poisson case, on real (non-simulated) data, is presented in Section~\ref{sec:examples-web}.
 
 \section{Applications}\label{sec:examples}
 
@@ -747,9 +751,9 @@ From a computational perspective, \code{capnet} achieves runtime comparable to \
 
 \subsection{Web Traffic}\label{sec:examples-web}
 
-A second application of \pkg{capnet}, outside quantitative finance, arises in forecasting aggregate web traffic from a panel of individual, heavy-tailed content-level pageview series. Article-level popularity on the web is well documented to be Zipf-like and heavy-tailed: a small number of pages can go viral and receive orders of magnitude more traffic than usual on a given day \citep{crovella1997}. A count-regression model that forecasts tomorrow's site-wide traffic from today's per-article pageviews is exactly the setting \pkg{capnet} targets: without a contribution cap, a single freak spike in one article's traffic can dominate the forecast, even though the associated coefficient need not be unusually large under a standard fit.
+A second application of \pkg{capnet} arises in forecasting aggregate web traffic from a panel of individual, heavy-tailed content-level pageview series. Article-level popularity on the web is well documented to be Zipf-like and heavy-tailed. On any given day, small number of pages can go viral and receive orders of magnitude more traffic than usual \citep{crovella1997}. Within this setting, conventional penalization tools such as $\ell_1$ and $\ell_2$ norms do little to constrain the spikes in feature level contributions that can dominate the forecast and hamper predictive performance.
 
-To illustrate this, we use daily English Wikipedia pageviews (January 1, 2022 through December 31, 2024) for 30 widely-read articles spanning major technology companies, artificial-intelligence and cryptocurrency topics, and prominent public figures, obtained from the public Wikimedia Pageviews REST API. The response is next-day total pageviews summed across all 30 articles; the covariates are each article's own pageviews (in thousands of views) on the current day. Table~\ref{tab:wiki_variable} reports summary statistics for a representative subset of the covariate panel.
+To illustrate this, we use daily English Wikipedia pageviews (January 1, 2022 through December 31, 2024) for 30 widely-read articles spanning major technology companies, artificial-intelligence and cryptocurrency topics, and prominent public figures, obtained from the public Wikimedia Pageviews REST API. The response is next-day total pageviews summed across all 30 articles; the covariates are each article's own pageviews (in thousands of views) on the current day. Table~\ref{tab:wiki_variable} reports summary statistics for a representative subset of the covariate panel. Most articles here exhibit extreme leptokurtosis. \code{Microsoft} and \code{Youtube} in particular have excess kurtosis several orders of magnitude larger than any variable in Table~\ref{tab:variable}.
 
 \begin{table}[ht]
 \centering
@@ -773,9 +777,9 @@ To illustrate this, we use daily English Wikipedia pageviews (January 1, 2022 th
 \label{tab:wiki_variable}
 \end{table}
 
-Table~\ref{tab:wiki_variable} shows that, unlike the financial covariates in Section~\ref{sec:examples-finance}, most articles here exhibit extreme leptokurtosis rather than the occasional mild departure from Gaussianity---\code{Microsoft} and \code{Youtube} in particular have excess kurtosis several orders of magnitude larger than any variable in Table~\ref{tab:variable}. This motivates a Poisson log-link specification rather than the Gaussian model used in the finance example, and illustrates that contribution caps are useful well beyond the additive, Gaussian setting emphasized in Section~\ref{sec:examples-finance}.
+We forecast next-day total pageviews with a Poisson log-link model, using a rolling one-year training window refit monthly and evaluated out-of-sample from January 1, 2023 through December 31, 2024. To isolate the effect of the contribution cap alone, we forgo the elastic-net variable selection entirely (\code{lambda = 0}). 
 
-We forecast next-day total pageviews with a Poisson log-link model, using a rolling one-year training window refit monthly and evaluated out-of-sample from January 1, 2023 through December 31, 2024. Because the Poisson log-likelihood scales with the (very large) raw pageview counts, we set \code{alpha = 0} and forgo elastic-net selection entirely (\code{lambda = 0}), so that the comparison isolates the effect of the contribution cap alone. Contribution ceilings are computed analogously to the finance example, as a multiple of each feature's univariate regression coefficient with the response---here a univariate Poisson generalized linear model slope in place of the ordinary least squares slope. As in Section~\ref{sec:examples-finance}, we compare an uncapped baseline, a post-fit capping method, and the walk-forward \pkg{capnet} approach across a range of $\gamma$ values. Table~\ref{tab:wiki_result} reports the out-of-sample pseudo-$R^2$ (relative to an expanding historical-mean benchmark) across specifications.
+The Poisson log-likelihood scales with the (very large) raw pageview counts, we set \code{alpha = 0} and forgo elastic-net selection entirely (\code{lambda = 0}), so that the comparison isolates the effect of the contribution cap alone. Contribution ceilings are computed analogously to the finance example, as a multiple of each feature's univariate regression coefficient with the response---here a univariate Poisson generalized linear model slope in place of the ordinary least squares slope. As in Section~\ref{sec:examples-finance}, we compare an uncapped baseline, a post-fit capping method, and the walk-forward \pkg{capnet} approach across a range of $\gamma$ values. Table~\ref{tab:wiki_result} reports the out-of-sample pseudo-$R^2$ (relative to an expanding historical-mean benchmark) across specifications.
 
 \begin{table}[h]
     \centering
@@ -796,7 +800,7 @@ We forecast next-day total pageviews with a Poisson log-link model, using a roll
     \label{tab:wiki_result}
 \end{table}
 
-Unlike in the finance example, the uncapped model here is not merely unstable but catastrophically so: a single covariate combination lands far outside its training distribution and produces an implausible next-day forecast, driving the uncapped pseudo-$R^2$ deeply negative. Post-fit capping clips the offending contribution after the fact but does not allow the coefficients to adjust, and so it too remains unstable. The walk-forward \pkg{capnet} model, which incorporates the contribution cap directly into estimation, is the only approach that achieves a positive out-of-sample pseudo-$R^2$, provided $\gamma$ is large enough to bind.
+The uncapped model here extremely unstable. A single covariate combination lands far outside its training distribution and produces an implausible next-day forecast, driving the uncapped pseudo-$R^2$ deeply negative. Post-fit capping clips the offending contribution after the fact but does not allow the coefficients to adjust, and so it does not offer a satisfiable solution. The walk-forward \pkg{capnet} model, which incorporates the contribution cap directly into estimation, is the only approach that achieves a positive out-of-sample pseudo-$R^2$, provided $\gamma$ is large enough to bind.
 
 \begin{figure}[h]
     \centering
@@ -836,7 +840,7 @@ To further illustrate how \pkg{capnet} redistributes feature contributions, Tabl
     \label{tab:wiki_contributions}
 \end{table}
 
-As a robustness check on this result, we repeat the backtest restricted to calendar year 2024 only, which excludes the March 2023 event entirely. Over this shorter window the uncapped model is no longer catastrophic (OOS pseudo-$R^2 \approx 0.540$), but the walk-forward \pkg{capnet} model still achieves a modest, consistent improvement (OOS pseudo-$R^2 \approx 0.569$ at $\gamma = 10{,}000$), while post-fit capping remains the weakest approach throughout (OOS pseudo-$R^2 \approx -1.11$). This indicates that the benefit of \pkg{capnet} is not solely an artifact of avoiding one extreme event: even absent a catastrophic blowup, incorporating the contribution cap directly into estimation yields a systematically more reliable fit than either the uncapped or post-fit alternative.
+As a robustness check on this result, we repeat the backtest restricted to calendar year 2024 only, which excludes the March 2023 event entirely. Over this shorter window the uncapped model is no longer catastrophic (OOS pseudo-$R^2 \approx 0.540$), but the walk-forward \pkg{capnet} model still achieves a modest, consistent improvement (OOS pseudo-$R^2 \approx 0.569$ at $\gamma = 10{,}000$), while post-fit capping is the weakest approach throughout (OOS pseudo-$R^2 \approx -1.11$). This indicates that the benefit of \pkg{capnet} is not solely an artifact of avoiding one extreme event. Even absent large outlier event, incorporating the contribution cap directly into estimation yields a systematically more reliable fit than either the uncapped or post-fit alternative.
 
 \section{Conclusion}\label{sec:conclusion}
 
