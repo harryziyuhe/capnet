@@ -1,11 +1,19 @@
 #' Perform walk-forward model fitting with contribution caps
-#' 
+#'
 #' Fits a linear elastic net model with an additional contribution-cap penalty
-#' by repeatedly refitting over expanding data and generating out-of-sample
-#' predictions in a walk-forward manner. At each step, the model is trained on
-#' all rows up to the current cut point and evaluated on the next \code{walk}
-#' rows.
-#' 
+#' once on the full training data \code{X}, \code{y}, then walks the
+#' contribution-cap penalty forward across the evaluation matrix \code{z},
+#' re-solving the objective at each step with the penalty applied only to the
+#' next \code{walk} row(s) of \code{z} (rather than to all of \code{z} at
+#' once, as a single call to \code{\link{capnet}} would do). The training data
+#' is not expanded or refit incrementally as \code{z} is walked; this mirrors
+#' a deployment setting where \code{X}, \code{y} are a data snapshot (e.g. a
+#' rolling training window) already prepared upstream, and repeating that
+#' preprocessing for every new evaluation row would be prohibitively
+#' expensive. To simulate a fully expanding training window instead, call
+#' \code{\link{capnet}} directly in a loop with an updated \code{X}, \code{y}
+#' at each step.
+#'
 #' @import xts
 #' @importFrom zoo index
 #' 
@@ -56,12 +64,19 @@
 #'    \code{gamma} used at each step.}
 #' 
 #' @details
-#' Given the evaluation matrix \code{z} of size \eqn{S\times p}. At step 
-#' \eqn{s=1,\dots,S}, the model is trained on \code{X} and \code{y} and the 
-#' contribution caps are evaluated on rows 
-#' \eqn{(s-1)\times\text{walk}:s\times\text{walk}}. Each fit calls 
-#' \code{capnet()} internally with the provided hyperparameters and constraints.
-#' 
+#' Given the evaluation matrix \code{z} of size \eqn{S\times p}, \code{X} and
+#' \code{y} are standardized (if requested) once, up front, and held fixed
+#' across all steps. At step \eqn{s=1,\dots,S}, \code{capnet()} is called
+#' internally on this fixed training fit, with the contribution-cap penalty
+#' restricted to rows \eqn{(s-1)\times\text{walk}:s\times\text{walk}} of
+#' \code{z}; because the cap penalty (and its gradient) depend on the
+#' evaluation slice, coefficients are genuinely re-optimized at each step, not
+#' merely re-evaluated. Penalizing a smaller, local slice of \code{z} instead
+#' of the whole evaluation matrix at once (as plain \code{capnet()} would)
+#' avoids the over-penalization that comes from forcing a single fit to
+#' satisfy contribution caps uniformly across every evaluation row
+#' simultaneously.
+#'
 #' @seealso [capnet()], [predict.capnet()], [coef.capnet()]
 #' 
 #' @examples
