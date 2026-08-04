@@ -72,3 +72,83 @@ test_that("contribution-cap gradient (capnet_fit.R) is scale-invariant across mi
     max(abs(fit_uncapped$feature_contributions))
   )
 })
+
+# The tests below check the *full* composite objective built by
+# .capnet_objective() -- likelihood + ridge + contribution-cap penalty,
+# including the standardize/original-scale chain rule -- rather than just the
+# base likelihood covered above. This is the exact closure .capnet_fit() hands
+# to lbfgs(), so it exercises the ridge and cap-penalty gradient terms (and
+# their interaction with standardization and a non-uniform multiplier) that
+# the likelihood-only checks above cannot reach.
+.build_objective_fixture <- function(family, standardize, multiplier = 1,
+                                      n = 120, p = 5, m = 15, seed = 1) {
+  set.seed(seed)
+  d <- simulate_capnet_data(n = n, p = p, m = m, family = family)
+  L <- d$L
+
+  spec <- .capnet_spec(
+    X = d$X, y = d$y, L = L, family = family,
+    standardize = standardize, z = d$Z, multiplier = multiplier
+  )
+  train <- .capnet_standardize_train(spec)
+  cap <- .capnet_cap_context(spec)
+  list(train = train, cap = cap, p = p)
+}
+
+test_that("full objective gradient (capnet_fit.R) matches numerical gradient across families", {
+  for (fam in c("gaussian", "binomial", "poisson", "gamma")) {
+    for (standardize in c(TRUE, FALSE)) {
+      fx <- .build_objective_fixture(fam, standardize)
+      params <- list(alpha = 0.3, lambda = 0.7, gamma = 5)
+
+      set.seed(3)
+      betas <- rnorm(fx$p + 1, sd = 0.3)
+      result <- .objective_gradient_check(fx$train, fx$cap, params, betas)
+      expect_lt(
+        result$max_diff, 1e-5,
+        label = sprintf("family=%s standardize=%s", fam, standardize)
+      )
+    }
+  }
+})
+
+test_that("full objective gradient matches numerical gradient with a non-uniform multiplier", {
+  fx <- .build_objective_fixture(
+    "gaussian", standardize = TRUE,
+    multiplier = seq(0.5, 2, length.out = 15)
+  )
+  params <- list(alpha = 0.2, lambda = 0.4, gamma = 8)
+
+  set.seed(4)
+  betas <- rnorm(fx$p + 1, sd = 0.3)
+  result <- .objective_gradient_check(fx$train, fx$cap, params, betas)
+  expect_lt(result$max_diff, 1e-5)
+})
+
+test_that("full objective gradient is well-behaved at the cap-penalty kink (|beta*Z| == L)", {
+  # The hinge-squared cap penalty is continuously differentiable everywhere,
+  # including exactly at the activation boundary |beta_j * Z_ij| == L_j (the
+  # derivative of max(0,u)^2 is 2*max(0,u)*u', which is 0 -- not discontinuous
+  # -- at u=0). Construct beta so a contribution lands almost exactly on L_j
+  # and confirm the analytic gradient still matches the numerical one there.
+  set.seed(5)
+  n <- 100; p <- 3; m <- 10
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X %*% c(1, -1, 0.5) + rnorm(n))
+  Z <- matrix(rnorm(m * p), m, p)
+
+  # Choose L so that column 1's cap is exactly hit by a mid-sized beta.
+  beta_probe <- c(0.4, -0.2, 0.1)
+  contributions <- abs(sweep(Z, 2, beta_probe, "*"))
+  L <- apply(contributions, 2, function(col) sort(col, decreasing = TRUE)[m %/% 2])
+
+  spec <- .capnet_spec(X = X, y = y, L = L, family = "gaussian",
+                       standardize = TRUE, z = Z)
+  train <- .capnet_standardize_train(spec)
+  cap <- .capnet_cap_context(spec)
+  params <- list(alpha = 0, lambda = 0.1, gamma = 20)
+
+  betas <- c(0, beta_probe * train$scaling_factor)
+  result <- .objective_gradient_check(train, cap, params, betas)
+  expect_lt(result$max_diff, 1e-5)
+})
