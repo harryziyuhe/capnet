@@ -7,3 +7,10 @@
 ^\.Rproj$
 ^\.DS_Store$
 ^LICENSE\.md$
+^manuscript$
+^\.claude$
+^CLAUDE\.md$
+^capnet_hex\.png$
+^capnet\.png$
+^\.latexmkrc$
+^parallel-cv-walk-summary\.md$
