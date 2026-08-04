@@ -32,7 +32,7 @@ In many practical applications, it may be desirable to impose additional structu
 We define the contribution of covariates $i$ as the absolute value of the product $\beta_iZ_i$, where $Z_i$ is a data matrix used to evaluate feature contributions, and seek to penalize contributions that exceed a specific upper bound $L_i$. This leads to either a hard-constrained formulation:
 $$\arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)\quad\text{s.t.}\quad \beta_iZ_i\leq L\quad\forall i$$
 or a soft-constrained formulation, where the violation of contribution caps is penalized:
-$$\arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)+\mu\sum_{i=1}^k\Big|\Big|\max\big(0,|\beta_iZ_i|-L\big)\Big|\Big|_p^p$$
+$$\arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)+\gamma\sum_{i=1}^k\Big|\Big|\max\big(0,|\beta_iZ_i|-L\big)\Big|\Big|_p^p$$
 where $k$ is the number of covariates and $L$ is the contribution cap vector. When $p=2$, the cap penalty becomes a sum of squared violations, which is differentiable almost everywhere and easier to optimize compared to an $\mathcal{l}_1$-based formulation. While the overall penalty remains non-smooth due to the $\max(0,\cdot)$, the use of squared penalty reduces sensitivity near the boundary and facilitates convergence with quasi-Newton methods.
 
 This formulation resembles generalized LASSO-type problems [@tibshirani_solution_2011] and constrained penalization frameworks [@james_penalized_2020], but with an important difference: the penalty is applied to the feature contributions, not the coefficients themselves. Because the capped contributions involve data-dependent terms ($\beta_iX_i$) and a non-linear transformation, there is no simple matrix $D$ such that this penalty reduces to a standard form $|\|D\beta\||_1$.
@@ -44,7 +44,7 @@ The inclusion of the contribution cap penalty renders off-the-shelf solvers like
  - **OWL-QN (Orthant-Wise Limited-memory Quasi-Newton)**: Specifically designed for problems with an $\mathcal{l}_1$ term, OWL-QN preserves the convergence efficiency of L-BFGS while accounting for the subgradient structure of the $\mathcal{l}_1$ norm.
  
 To align with `glmnet` conventions, we rewrite the loss in a normalized form as
-$$\min_{\beta_0,\beta}\frac{1}{2N}\sum_{i=1}^N\Big(y_i-(\beta_0+x_i^T\beta)\Big)^2+\lambda\bigg[\frac{(1-\alpha)}{2}||\beta||_2^2+\alpha||\beta||_1\bigg]+\mu\sum_{i=1}^k\max\big(0,|\beta_iZ_i|-L\big)^2$$
+$$\min_{\beta_0,\beta}\frac{1}{2N}\sum_{i=1}^N\Big(y_i-(\beta_0+x_i^T\beta)\Big)^2+\lambda\bigg[\frac{(1-\alpha)}{2}||\beta||_2^2+\alpha||\beta||_1\bigg]+\gamma\sum_{i=1}^k\max\big(0,|\beta_iZ_i|-L\big)^2$$
 
 ### Basic Usage of Capnet
 
@@ -65,7 +65,7 @@ capnet.cv1 <- cv_capnet(X, y, 0, L, standardize = FALSE)
 alpha1 <- capnet.cv1$best_alpha
 lambda1 <- capnet.cv1$best_lambda
 capnet.mod1 <- capnet(X, y, alpha = alpha1, lambda = lambda1,
-                 mu = 0, L = L, standardize = FALSE)
+                 gamma = 0, L = L, standardize = FALSE)
 ```
 
 ```{r results='asis', echo=FALSE}
@@ -77,7 +77,7 @@ capnet.cv2 <- cv_capnet(X, y, 1, L, standardize = FALSE)
 alpha2 <- capnet.cv2$best_alpha
 lambda2 <- capnet.cv2$best_lambda
 capnet.mod2 <- capnet(X, y, alpha = alpha2, lambda = lambda2,
-                 mu = 0.5, L = L, standardize = FALSE)
+                 gamma = 0.5, L = L, standardize = FALSE)
 ```
 
 ```{r results='asis', echo=FALSE}
@@ -92,17 +92,17 @@ plots$contribution
 
 ```{r runtime, echo = FALSE}
 print("System runtime for unconstrained 5-fold cross-validation")
-print(system.time(cv_capnet(X, y, mu = 0, L = L, standardize = FALSE)))
+print(system.time(cv_capnet(X, y, gamma = 0, L = L, standardize = FALSE)))
 print("System runtime for constrained 5-fold cross-validation")
-print(system.time(cv_capnet(X, y, mu = 1, L = L, standardize = FALSE)))
+print(system.time(cv_capnet(X, y, gamma = 1, L = L, standardize = FALSE)))
 print("System runtime for constrained model fit")
-print(system.time(capnet(X, y, alpha = 0.5, lambda = 0.1, mu = 10, L = L, standardize = FALSE)))
+print(system.time(capnet(X, y, alpha = 0.5, lambda = 0.1, gamma = 10, L = L, standardize = FALSE)))
 ```
 
 ### Additional Parameters
 
 #### Standardization
-Similar to `glmnet`, `capnet` also has a `standardize` parameter that is default to `TRUE`. This controls standardization of the `X` and `y` matrices. It is often recommended to scale `X` and `y` terms for elastic net regressions and that also applies to `capnet` as well. The function has been optimized to handle variable scaling such that the penalty term, which is calculated at the original variable scale, is scaled to be in the same unit as the rest of the loss and gradient terms to avoid convergence failure due to unit mismatch. Therefore, the user should supply `newx` and `L` in the same scale as `X` and `y` regardless of the value of the `standardize` parameter.
+Similar to `glmnet`, `capnet` also has a `standardize` parameter that is default to `TRUE`. This controls standardization of the `X` and `y` matrices. It is often recommended to scale `X` and `y` terms for elastic net regressions and that also applies to `capnet` as well. The function has been optimized to handle variable scaling such that the penalty term, which is calculated at the original variable scale, is scaled to be in the same unit as the rest of the loss and gradient terms to avoid convergence failure due to unit mismatch. Therefore, the user should supply `z` and `L` in the same scale as `X` and `y` regardless of the value of the `standardize` parameter.
 
 #### Multiplier
 The `multiplier` parameter in `capnet` controls the scaling applied to feature contributions. It is particularly useful when the contribution cap needs to be evaluated across multiple observations with non-uniform scaling factors for each observation. For example, if the user has a constant contribution limit `L` but wishes to evaluate contributions for several prediction points, each requiring different scaling, `multiplier` can be specified as a $n\times1$ vector of scalars corresponding to each observation. This avoids the need to manually transform `L` into a matrix aligned with each observation. Currently, the implementation does not support `L` as a matrix input, so `multiplier` provides a flexible alternative for handling observation-specific scaling requirements efficiently.
@@ -113,7 +113,7 @@ The `capnet` function also allows users to enforce box constraints on model para
 **Parameter initialization**: Because box constraints are achieved via gradient masking, the initial parameter values `par` needs to be within the specified limits. If initial values fall outside these bounds, optimization may fail to converge or produce invalid results. By default, `par` initializes to zeros, so users should adjust the initialization if zeros fall outside the desired parameter range.
 
 #### Convergence Failure
-Because `capnet` relies on the `lbfgs` package for optimization, convergence failure can be caused by multiple factors and may be hard for users to detect and debug. The `check.finite` parameter can help the user determine whether convergence failure occurred due to non-finite values when calculating loss and gradients. By setting `check.finite=TRUE`, the function will catch and throw non-finite value errors. It is also important to note that the model does not stop or return error even when convergence failed, so users are advised to manually check model convergence after fitting. Because `lbfgs` does not handle and store messages for all convergence failure codes, the message output may not provide useful information on why convergence failed. Generally, when users encounter a $-998$ error code, it is usually that the line search algorithm failed because the gradient values are too unstable.
+Because `capnet` relies on the `lbfgs` package for optimization, convergence failure can be caused by multiple factors and may be hard for users to detect and debug. Importantly, the function does not stop or raise an error when convergence fails, so users are advised to manually inspect `fit$convergence` and `fit$message` after fitting; a `convergence` value other than `0` indicates the optimizer did not reach its usual stopping criterion. Because `lbfgs` does not store a descriptive message for every failure code, the message output may not always explain why convergence failed. Generally, when users encounter a $-998$ error code, it is usually that the line search algorithm failed because the gradient values are too unstable -- reducing `gamma`, `lambda`, or rescaling ill-conditioned features can help.
 
 ## Use cases for Contribution Cap Penalty
 ### Finance
