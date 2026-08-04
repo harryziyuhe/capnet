@@ -14,8 +14,13 @@
 #' @param alpha Numeric scalar in \eqn{[0,1]} (default \code{0.5}); the 
 #'  elastic-net mixing parameter. \code{alpha = 1} is Lasso, \code{alpha=0} is 
 #'  Ridge. 
-#' @param gamma Nonnegative numeric scalar; strength of the contribution-cap 
+#' @param gamma Nonnegative numeric scalar; strength of the contribution-cap
 #' penalty (default \code{1}).
+#' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
+#'  are standardized for fitting at each point on the path; coefficients are
+#'  still returned on the original scale. Default \code{FALSE}, so that
+#'  coefficients along the path are computed directly on the original scale
+#'  without a per-fit standardization step.
 #' @param ... Additional arguments forwarded to \code{capnet()}, e.g.,
 #'  \code{z}, \code{par}, \code{multiplier}, \code{intercept},
 #'  \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit},
@@ -44,9 +49,10 @@
 #' @export
 
 coef_path <- function(X, y, L,
-                      lambda = exp(seq(1, -5, length.out = 50)), 
-                      alpha = 0.5, 
+                      lambda = exp(seq(1, -5, length.out = 50)),
+                      alpha = 0.5,
                       gamma = 1,
+                      standardize = FALSE,
                       ...) {
   # Stop if there is any NA value in data
   if (anyNA(X) || anyNA(y)) {
@@ -93,7 +99,7 @@ coef_path <- function(X, y, L,
                              alpha = a,
                              gamma = g,
                              L = L,
-                             standardize = FALSE,
+                             standardize = standardize,
                              ...)
     betas <- rbind(betas, capnet_results$beta)
   }

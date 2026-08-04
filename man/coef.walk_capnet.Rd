@@ -4,10 +4,10 @@
 \alias{coef.walk_capnet}
 \title{Extract coefficient paths from a walk-forward \code{capnet} fit}
 \usage{
-\method{coef}{walk_capnet}(x, index = NULL, ...)
+\method{coef}{walk_capnet}(object, index = NULL, ...)
 }
 \arguments{
-\item{x}{A fitted object of class \code{"walk_capnet"} returned by
+\item{object}{A fitted object of class \code{"walk_capnet"} returned by
 \code{walk_capnet()}}
 
 \item{index}{Optional integer vector of rows/steps to return}

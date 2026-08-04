@@ -4,15 +4,15 @@
 \alias{predict.walk_capnet}
 \title{Predict from a walk-forward \code{capnet} fit}
 \usage{
-\method{predict}{walk_capnet}(x, ...)
+\method{predict}{walk_capnet}(object, ...)
 }
 \arguments{
-\item{x}{A fitted object of class \code{"walk_capnet"}.}
+\item{object}{A fitted object of class \code{"walk_capnet"}.}
 
 \item{...}{Further arguments passed to or from other methods.}
 }
 \value{
-Numeric vector (or matrix) of predictions stored in x
+Numeric vector (or matrix) of predictions stored in object
 }
 \description{
 Predict from a walk-forward \code{capnet} fit

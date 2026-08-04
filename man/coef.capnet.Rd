@@ -4,10 +4,10 @@
 \alias{coef.capnet}
 \title{Extract coefficients from a fitted \code{capnet} model}
 \usage{
-\method{coef}{capnet}(x, ...)
+\method{coef}{capnet}(object, ...)
 }
 \arguments{
-\item{x}{A fitted object of class \code{"capnet"}.}
+\item{object}{A fitted object of class \code{"capnet"}.}
 
 \item{...}{Further arguments passed to or from other methods.}
 }

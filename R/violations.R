@@ -8,9 +8,9 @@
 #' @param z Optional numeric matrix of new data on which to evaluate
 #'  contribution caps. If \code{NULL}, uses the contribution matrix
 #'  stored in \code{object$feature_contributions}.
-#' @param multiplier Optional numeric scalar or length-\eqn{p} vector to override
-#'  the multiplier used when the model was fit. If \code{NULL}, defaults to
-#'  \code{object$multiplier}.
+#' @param multiplier Optional numeric scalar or length-\eqn{n} vector (where
+#'  \eqn{n} is \code{nrow(z)}) to override the multiplier used when the model
+#'  was fit. If \code{NULL}, defaults to \code{object$multiplier}.
 #' 
 #' @return
 #' A list with the following components:

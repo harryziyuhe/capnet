@@ -1,27 +1,30 @@
-# Engine for fitting capnet models
-.capnet_fit <- function(train, cap, params, verbose = 0) {
-  
+# Builds the smooth loss/gradient closures (likelihood + ridge + contribution
+# cap penalty) that .capnet_fit() hands to lbfgs(). Factored out so tests can
+# finite-difference-check the exact composite objective actually optimized,
+# not just the base likelihood.
+.capnet_objective <- function(train, cap, params) {
+
   X <- train$X
   y <- train$y
   n <- nrow(X)
   scaling_factor <- train$scaling_factor
-  
+
   alpha <- params$alpha
   lambda <- params$lambda
   gamma <- params$gamma
-  
+
   newx <- cap$z
   multiplier <- cap$multiplier
   L <- cap$L
   m <- nrow(newx)
-  
+
   # Loss function combining (only the smooth part)
   # 1. Likelihood loss
   # 2. Ridge penalty (LASSO penalty is non-smooth and therefore excluded)
   # 3. Contribution cap penalty
-  
+
   lik <- make_likelihood(train$family, X, y)
-  
+
   loss <- function(beta) {
     beta_0 <- beta[1]
     beta_rest <- beta[-1]
@@ -88,16 +91,24 @@
     
     gradient_rest[beta_rest <= train$lower.limits + train$tol & gradient_rest > 0] <- 0
     gradient_rest[beta_rest >= train$upper.limits - train$tol & gradient_rest < 0] <- 0
-    
+
     return(c(gradient_0, gradient_rest))
   }
-  
-  fit <- lbfgs(loss, gradient, train$par,
+
+  list(loss = loss, gradient = gradient)
+}
+
+# Engine for fitting capnet models
+.capnet_fit <- function(train, cap, params, verbose = 0) {
+
+  obj <- .capnet_objective(train, cap, params)
+
+  fit <- lbfgs(obj$loss, obj$gradient, train$par,
                orthantwise_c = params$lambda * params$alpha,
                orthantwise_start = 1,
                max_iterations = train$maxit,
                invisible = 1 - verbose)
-  
+
   list(
     a0 = fit$par[1],
     beta = fit$par[-1],

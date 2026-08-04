@@ -3,41 +3,41 @@
 #' Returns the estimated intercept and coefficients from a fitted
 #' \code{capnet} model object.
 #' 
-#' @param x A fitted object of class \code{"capnet"}.
+#' @param object A fitted object of class \code{"capnet"}.
 #' @param ... Further arguments passed to or from other methods.
-#' 
-#' @return 
+#'
+#' @return
 #' A named numeric vector (or single-column matrix) containing the intercept
 #' followed by the fitted coefficients, labeled with their corresponding
 #' variable names.
-#' 
+#'
 #' @seealso [capnet()], [predict()] [predict.capnet()]
-#' 
+#'
 #' @export
 #' @method coef capnet
-coef.capnet <- function(x, ...) {
-  coefs <- matrix(c(x$a0, x$beta), ncol = 1)
-  rownames(coefs) <- c("(Intercept)", names(x$beta))
+coef.capnet <- function(object, ...) {
+  coefs <- matrix(c(object$a0, object$beta), ncol = 1)
+  rownames(coefs) <- c("(Intercept)", names(object$beta))
   colnames(coefs) <- "beta"
   coefs
 }
 
 #' Extract coefficient paths from a walk-forward \code{capnet} fit
-#' 
-#' @param x A fitted object of class \code{"walk_capnet"} returned by
+#'
+#' @param object A fitted object of class \code{"walk_capnet"} returned by
 #'  \code{walk_capnet()}
 #' @param index Optional integer vector of rows/steps to return
 #' @param ... Further arguments passed to or from other methods.
-#' 
+#'
 #' @return A numeric matrix whose first column is the intercept path and the
 #'  remaining columns are coefficient paths.
-#' 
+#'
 #' @seealso [walk_capnet()], [predict()], [predict.walk_capnet()]
-#' 
+#'
 #' @export
 #' @method coef walk_capnet
-coef.walk_capnet <- function(x, index = NULL, ...) {
-  coefs <- cbind(x$intercepts, x$betas)
+coef.walk_capnet <- function(object, index = NULL, ...) {
+  coefs <- cbind(object$intercepts, object$betas)
   if (!is.null(index)) {
     coefs <- coefs[index,]
   }
@@ -92,17 +92,17 @@ predict.capnet <- function(object, newdata  = NULL, type = c("link", "response")
 
 #' Predict from a walk-forward \code{capnet} fit
 #' 
-#' @param x A fitted object of class \code{"walk_capnet"}.
+#' @param object A fitted object of class \code{"walk_capnet"}.
 #' @param ... Further arguments passed to or from other methods.
-#' 
-#' @return Numeric vector (or matrix) of predictions stored in x
-#' 
+#'
+#' @return Numeric vector (or matrix) of predictions stored in object
+#'
 #' @seealso [walk_capnet()], [predict()]
-#' 
+#'
 #' @export
 #' @method predict walk_capnet
-predict.walk_capnet <- function(x, ...) {
-  x$predictions
+predict.walk_capnet <- function(object, ...) {
+  object$predictions
 }
 
 #' Plot cross-validation results for \code{cv_capnet}

@@ -4,8 +4,8 @@
 #' cross-validation for the \code{capnet()} model. Returns the searched grid,
 #' fold-wise errors, mean errors, and the best hyperparameters.
 #' 
-#' @importFrom stats sd
-#' 
+#' @importFrom stats sd predict
+#'
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
 #'  features and rows are observations.
 #' @param y Numeric response vector of length \eqn{n}.
@@ -108,8 +108,9 @@ cv_capnet <- function(X, y,
                       parallel = FALSE,
                       workers = NULL,
                       ...) {
+  metric_missing <- missing(metric) || is.null(metric)
   metric <- match.arg(metric)
-  
+
   X <- as.matrix(X)
   y <- as.numeric(y)
   
@@ -133,7 +134,7 @@ cv_capnet <- function(X, y,
     ...
   )
   
-  if (missing(metric) || is.null(metric)) {
+  if (metric_missing) {
     f <- tolower(spec$family$family)
     metric <- switch(f,
       gaussian = "mse",
