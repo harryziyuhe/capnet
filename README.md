@@ -12,7 +12,7 @@ A differentiable penalty on what each feature *actually does to a prediction* â€
 
 ---
 
-## A single feature can break a model â€” here's the proof
+## A single feature can break a model
 
 <p align="center"><img src="manuscript/figs/wiki_oosrsq.png" width="700"/></p>
 
