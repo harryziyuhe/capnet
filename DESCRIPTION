@@ -3,10 +3,7 @@ Type: Package
 Title: Contribution-Capped Elastic Net Regularization
 Version: 0.3.3
 Date: 2026-09-21
-Authors@R:
-    c(
-        person("Harry", "He", email = "zih028@ucsd.edu", role = c("aut", "cre")),
-    )
+Authors@R: person("Harry", "He", email = "zih028@ucsd.edu", role = c("aut", "cre"))
 Description: Implements contribution-capped regularization to directly bound
     per-feature contributions in predictive models. Includes OWL-QN
     optimization, cross-validation, walk-forward fitting and prediction,
