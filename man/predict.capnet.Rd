@@ -7,22 +7,43 @@
 \method{predict}{capnet}(object, newdata = NULL, type = c("link", "response"), ...)
 }
 \arguments{
-\item{object}{A fitted object of class \code{"capnet"}}
+\item{object}{A fitted object of class \code{"capnet"}.}
 
-\item{newdata}{Optional numeric matrix for prediction. If \code{NULL}, uses
-\code{object$z} (the evaluation matrix stored at fit time).}
+\item{newdata}{Optional numeric matrix with \eqn{p} columns for prediction.
+If \code{NULL}, uses \code{object$z} (the evaluation matrix stored at fit
+time).}
 
-\item{type}{"link" returns linear predictor eta; "response" returns mean mu.}
+\item{type}{Character; \code{"link"} returns the linear predictor
+\eqn{\hat\eta = \hat\beta_0 + X\hat\beta}; \code{"response"} applies the
+inverse link function and returns the fitted mean \eqn{\hat\mu}. For
+Gaussian models the two are identical. Default \code{"link"}.}
 
 \item{...}{Further arguments passed to or from other methods.}
 }
 \value{
-Numeric vector of predictions (length = number of rows in
-\code{newdata} or \code{object$z}).
+Numeric vector of length \code{nrow(newdata)} (or \code{nrow(z)} if
+\code{newdata} is \code{NULL}).
 }
 \description{
 Predict from a fitted \code{capnet} model
 }
+\details{
+When \code{newdata = NULL}, predictions are made on \code{object$z}, which
+is the evaluation matrix used when the model was fit. This is convenient for
+inspecting fitted contributions without re-specifying the data. When
+\code{newdata} is supplied it must have exactly \eqn{p} columns (matching
+\code{length(object$beta)}) but may have any number of rows.
+}
+\examples{
+set.seed(1)
+n <- 40; p <- 5
+X <- matrix(rnorm(n * p), n, p)
+y <- as.numeric(X \%*\% c(1, -1, 0.5, 0, 0) + rnorm(n))
+fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
+predict(fit, type = "response")            # fitted values on training z
+predict(fit, newdata = X, type = "link")   # linear predictor on new data
+
+}
 \seealso{
-\code{\link[=capnet]{capnet()}}, \code{\link[=predict]{predict()}}
+\code{\link[=capnet]{capnet()}}, \code{\link[=coef.capnet]{coef.capnet()}}
 }

@@ -19,8 +19,38 @@ at this lambda.}
 \item{...}{Further arguments passed to or from other methods.}
 }
 \value{
-The \code{x} (invisibly). The function prints a ggplot.
+The \code{ggplot} object, returned invisibly. As a side effect the
+plot is printed to the current graphics device.
 }
 \description{
 Plot cross-validation results for \code{cv_capnet}
+}
+\details{
+Three display modes depending on which arguments are supplied:
+\describe{
+\item{Neither \code{alpha} nor \code{lambda}}{Heatmap of ranked mean CV
+errors across the full \eqn{\alpha\times\lambda} grid. Lighter fill =
+better rank. Useful for identifying the most promising region before
+inspecting slices.}
+\item{\code{alpha} specified}{Line plot of mean CV error (± 1 SE across
+folds) vs \eqn{\log\lambda} at the given \eqn{\alpha}. A dashed
+vertical line marks the best \eqn{\lambda}.}
+\item{\code{lambda} specified}{Line plot of mean CV error (± 1 SE) vs
+\eqn{\alpha} at the given \eqn{\lambda}.}
+}
+Supply at most one of \code{alpha} and \code{lambda}; both must be values
+that appear in the searched grid.
+}
+\examples{
+\dontrun{
+  set.seed(1)
+  n <- 80; p <- 10
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X \%*\% c(rep(1, 3), rep(0, p - 3)) + rnorm(n))
+  cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
+  plot(cv)                        # full heatmap
+  plot(cv, alpha = cv$best_alpha) # error vs lambda slice
+  plot(cv, lambda = cv$best_lambda) # error vs alpha slice
+}
+
 }

@@ -33,8 +33,11 @@ features and rows are observations.}
 contribution ceiling(s). If scalar, the same ceiling is applied to all
 coefficients}
 
-\item{z}{Numeric matrix with \eqn{p} columns used to evaluate and
-enforce contribution caps (required).}
+\item{z}{Numeric matrix with \eqn{p} columns (required). Each row of
+\code{z} is one evaluation point; the walk steps through these rows in
+order, enforcing the cap on \code{walk} rows at a time. Must be on the
+same scale as \code{X}. If \code{z} is an \code{xts} object, the output
+matrices will also be \code{xts} with the same index.}
 
 \item{family}{Optional character scalar (e.g. "binomial"), function (e.g.
 \code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).}
@@ -48,8 +51,12 @@ Default \code{TRUE}.}
 \item{multiplier}{Optional numeric scalar or length-\eqn{n} vector used to
 scale feature contributions during the capping step. Defaults to 1.}
 
-\item{walk}{Integer; number of consecutive rows predicted at each step before
-advancing the window. Default \code{1}.}
+\item{walk}{Positive integer; number of consecutive rows of \code{z}
+predicted as a batch at each step. At step \eqn{s}, rows
+\eqn{(s-1)\cdot\text{walk}+1} through \eqn{s\cdot\text{walk}} of \code{z}
+are used to enforce the cap and generate predictions together. If
+\code{nrow(z)} is not evenly divisible by \code{walk}, the last step
+covers the remaining rows. Default \code{1} (one row per step).}
 
 \item{lambda}{Nonnegative numeric scalar; overall strength of the elastic net penalty.}
 
@@ -58,8 +65,12 @@ advancing the window. Default \code{1}.}
 
 \item{gamma}{Nonnegative numeric scalar; strength of the contribution-cap penalty.}
 
-\item{max_gamma_tries}{Optional numeric scalar; maximum number of tries of different
-gamma values for convergence. See \link[=walk_capnet]{Details}.}
+\item{max_gamma_tries}{Positive integer; maximum number of optimizer retries
+per step with a reduced \code{gamma}. If the optimizer fails to converge
+(convergence code \eqn{< 0}, excluding the benign \code{-1001} rounding
+error), \code{gamma} is divided by 10 and the step is retried up to
+\code{max_gamma_tries} times. If all retries fail, \code{NA} values are
+stored for that step. Default \code{6}.}
 
 \item{parallel}{Logical; if \code{TRUE}, walk-forward steps are dispatched
 across a \code{parallel::makeCluster()} PSOCK cluster via
@@ -67,24 +78,30 @@ across a \code{parallel::makeCluster()} PSOCK cluster via
 not change results. Default \code{FALSE}.}
 
 \item{workers}{Optional integer; number of parallel workers to use when
-\code{parallel = TRUE}. Defaults to \code{parallel::detectCores() - 1}.}
+\code{parallel = TRUE}. Defaults to \code{min(n_steps, detectCores() - 1,
+ 90)}: capped at the number of walk steps (idle workers add no value) and
+at 90 to avoid exhausting R's 128-connection limit.}
 
 \item{...}{Additional arguments used in fitting. See \code{\link[=capnet]{capnet()}} for more details.}
 }
 \value{
-An object of class \code{"walk_capnet"} with components:
-\item{\code{intercepts}}{Numeric vector of length \eqn{S} with fitted
-intercepts for each step.}
-\item{\code{betas}}{Numeric matrix of shape \eqn{p\times S} with fitted
-coefficients per step.}
-\item{\code{feature_contributions}}{Numeric matrix of shape
-\eqn{S\times p} giving per-row, per-feature contributions
-stacked across all evaluation rows in order of prediction.}
-\item{\code{predictions}}{Numeric matrix of out-of-sample predictions for
-the evaluation rows, on the response scale (i.e. \code{family$linkinv(eta)});
-shape \eqn{S\times p}.}
-\item{\code{gammas}}{Numeric vector of length \eqn{n_\mathrm{new}} for the
-\code{gamma} used at each step.}
+An object of class \code{"walk_capnet"} with components (each of
+length / size \eqn{\mathrm{nrow}(z)}, or an \code{xts} with the same
+index if \code{z} is \code{xts}):
+\item{\code{intercepts}}{\eqn{\mathrm{nrow}(z)\times 1} matrix of fitted
+intercepts; row \eqn{i} gives the intercept used to predict row \eqn{i}
+of \code{z}. \code{NA} if the step failed to converge.}
+\item{\code{betas}}{\eqn{\mathrm{nrow}(z)\times p} matrix of fitted
+slopes; rows within the same step share identical values. \code{NA} rows
+indicate convergence failure.}
+\item{\code{feature_contributions}}{\eqn{\mathrm{nrow}(z)\times p} matrix;
+element \eqn{(i,j)} is \eqn{z_{ij}\hat\beta_j} at step \eqn{s(i)}.}
+\item{\code{predictions}}{\eqn{\mathrm{nrow}(z)\times 1} matrix of
+predictions on the response scale (\code{family\$linkinv(eta)}). \code{NA}
+where the corresponding step failed to converge.}
+\item{\code{gammas}}{\eqn{\mathrm{nrow}(z)\times 1} matrix; the effective
+\code{gamma} used at each step (may be smaller than the supplied
+\code{gamma} if retries reduced it). \code{NA} on failure.}
 }
 \description{
 Fits a linear elastic net model with an additional contribution-cap penalty
@@ -117,14 +134,25 @@ simultaneously.
 }
 \examples{
 set.seed(1)
-n <- 60; p <- 6; n_new <- 10
+n <- 60; p <- 6; n_new <- 12
 X <- matrix(rnorm(n * p), n, p)
 z <- matrix(rnorm(n_new * p), n_new, p)
 beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
 y <- as.numeric(X \%*\% beta + rnorm(n))
-out <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5, gamma = 1, walk = 1)
+
+# One prediction per step
+out1 <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
+                    gamma = 1, walk = 1)
+predict(out1)     # nrow(z) x 1 predictions
+coef(out1)        # nrow(z) x (1 + p) coefficient path
+
+# Batch 3 rows per step (useful for weekly or monthly evaluation)
+out3 <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
+                    gamma = 1, walk = 3)
+any(is.na(predict(out3)))  # check for convergence failures
 
 }
 \seealso{
-\code{\link[=capnet]{capnet()}}, \code{\link[=predict.capnet]{predict.capnet()}}, \code{\link[=coef.capnet]{coef.capnet()}}
+\code{\link[=capnet]{capnet()}}, \code{\link[=cv_capnet]{cv_capnet()}}, \code{\link[=coef.walk_capnet]{coef.walk_capnet()}},
+\code{\link[=predict.walk_capnet]{predict.walk_capnet()}}
 }

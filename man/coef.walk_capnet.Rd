@@ -8,19 +8,35 @@
 }
 \arguments{
 \item{object}{A fitted object of class \code{"walk_capnet"} returned by
-\code{walk_capnet()}}
+\code{walk_capnet()}.}
 
-\item{index}{Optional integer vector of rows/steps to return}
+\item{index}{Optional integer vector of step indices (1 to \code{nrow(z)})
+to subset. If \code{NULL}, all steps are returned.}
 
 \item{...}{Further arguments passed to or from other methods.}
 }
 \value{
-A numeric matrix whose first column is the intercept path and the
-remaining columns are coefficient paths.
+A \eqn{\mathrm{nrow}(z)\times(1+p)} matrix (or \code{xts} if the
+input \code{z} was \code{xts}). The first column is the intercept path
+(named \code{"intercept"}); the remaining \eqn{p} columns are coefficient
+paths named from \code{colnames(X)}. Rows within the same walk step share
+identical values. \code{NA} rows indicate steps that failed to converge.
+If \code{index} is supplied, only those rows are returned.
 }
 \description{
 Extract coefficient paths from a walk-forward \code{capnet} fit
 }
+\examples{
+set.seed(1)
+n <- 50; p <- 5; n_new <- 8
+X <- matrix(rnorm(n * p), n, p)
+z <- matrix(rnorm(n_new * p), n_new, p)
+y <- as.numeric(X \%*\% c(1, -1, 0.5, 0, 0) + rnorm(n))
+fit <- walk_capnet(X, y, L = 1, z = z, lambda = 0.1, alpha = 0.5, gamma = 1)
+coef(fit)           # nrow(z) x (1 + p) path
+coef(fit, index = 1:3)  # first three steps only
+
+}
 \seealso{
-\code{\link[=walk_capnet]{walk_capnet()}}, \code{\link[=predict]{predict()}}, \code{\link[=predict.walk_capnet]{predict.walk_capnet()}}
+\code{\link[=walk_capnet]{walk_capnet()}}, \code{\link[=predict.walk_capnet]{predict.walk_capnet()}}
 }

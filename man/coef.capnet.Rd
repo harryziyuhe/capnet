@@ -12,14 +12,24 @@
 \item{...}{Further arguments passed to or from other methods.}
 }
 \value{
-A named numeric vector (or single-column matrix) containing the intercept
-followed by the fitted coefficients, labeled with their corresponding
-variable names.
+A \eqn{(1+p)\times 1} numeric matrix. The first row is the
+intercept (named \code{"(Intercept)"}); the remaining \eqn{p} rows are
+the fitted slopes, named from \code{colnames(X)} when available.
 }
 \description{
 Returns the estimated intercept and coefficients from a fitted
 \code{capnet} model object.
 }
+\examples{
+set.seed(1)
+n <- 40; p <- 5
+X <- matrix(rnorm(n * p), n, p)
+y <- as.numeric(X \%*\% c(1, -1, 0.5, 0, 0) + rnorm(n))
+fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
+coef(fit)          # (1 + p) x 1 matrix
+coef(fit)[-1, ]    # slopes only
+
+}
 \seealso{
-\code{\link[=capnet]{capnet()}}, \code{\link[=predict]{predict()}} \code{\link[=predict.capnet]{predict.capnet()}}
+\code{\link[=capnet]{capnet()}}, \code{\link[=predict.capnet]{predict.capnet()}}
 }

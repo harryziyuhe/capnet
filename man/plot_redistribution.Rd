@@ -14,11 +14,13 @@ plot_redistribution(
 )
 }
 \arguments{
-\item{uncapped}{An object returned by \code{capnet()} fit without a
-contribution cap(i.e., \code{gamma = 0} or large \code{L}).}
+\item{uncapped}{A \code{"capnet"} object fit without an active contribution
+cap (typically \code{gamma = 0}), serving as the baseline.}
 
-\item{capped}{An object returned by \code{capnet()} fit with contribution
-caps applied.}
+\item{capped}{A \code{"capnet"} object fit to the same \code{X} and
+\code{y} with contribution caps applied (\code{gamma > 0} and finite
+\code{L}). Both models should use the same evaluation matrix \code{z}
+so that contributions are comparable.}
 
 \item{X}{Optional numeric matrix of features used to compute contributions.
 If \code{NULL}, the function uses \code{capped$z}.}
@@ -55,8 +57,12 @@ uncapped and a capped \code{capnet} fit. Produces either side-by-side
 ("raw") bar charts of levels or ("delta") bar charts of changes.
 }
 \details{
-Contributions are calculated as column-wise products
-\eqn{contrib_j=\mathrm{mean}(X_{\cdot j})\times\beta_j\times multiplier_j}.
+For each model, per-row contributions are computed as
+\eqn{contrib_{ij} = X_{ij}\hat\beta_j \times multiplier_i}; the displayed
+contribution for feature \eqn{j} is the mean over rows:
+\eqn{\bar{contrib}_j = \mathrm{mean}_i(X_{ij}\hat\beta_j \times multiplier_i)}.
+The \code{multiplier} from the \code{capped} model is used; if the two models
+were fit with different multipliers the comparison may be misleading.
 }
 \examples{
 set.seed(1)
@@ -70,5 +76,5 @@ plot_redistribution(fit_uncap, fit_cap, plot = "delta")
 
 }
 \seealso{
-\code{\link[=capnet]{capnet()}}
+\code{\link[=capnet]{capnet()}}, \code{\link[=capnet_violations]{capnet_violations()}}
 }

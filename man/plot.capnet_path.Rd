@@ -7,14 +7,34 @@
 \method{plot}{capnet_path}(x, ...)
 }
 \arguments{
-\item{x}{A data.frame or matrix where the first column is the path
-parameter (e.g., \code{lambda}) and the remaining columns are coefficients.}
+\item{x}{An object of class \code{"capnet_path"} returned by
+\code{coef_path()}, or any \code{data.frame} with the same structure:
+first column is the path parameter, remaining columns are coefficients.}
 
 \item{...}{Further arguments passed to or from other methods.}
 }
 \value{
-The \code{ggplot} is printed; the plot x is returned invisibly.
+The \code{ggplot} object, returned invisibly. As a side effect the
+plot is printed to the current graphics device.
 }
 \description{
 Plot coefficient paths along a single hyperparameter
+}
+\details{
+Produces a line plot with the path parameter on the x-axis (log scale for
+\code{lambda} and \code{gamma} paths, linear for \code{alpha}) and
+coefficient values on the y-axis. Each feature is drawn as a separate
+colored line, making it easy to see which coefficients enter, shrink, or
+change sign along the path.
+}
+\examples{
+set.seed(1)
+n <- 50; p <- 6
+X <- matrix(rnorm(n * p), n, p)
+colnames(X) <- paste0("x", seq_len(p))
+y <- as.numeric(X \%*\% c(1.5, -1, 0.5, 0, 0, 0) + rnorm(n))
+path <- coef_path(X, y, L = 0.5, alpha = 0.5,
+                  lambda = exp(seq(1, -5, length.out = 30)), gamma = 1)
+plot(path)
+
 }

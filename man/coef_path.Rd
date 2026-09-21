@@ -46,8 +46,12 @@ without a per-fit standardization step.}
 \code{check.finite}, \code{verbose}.}
 }
 \value{
-A \code{data.frame} in long/tidy format with one row per
-(\code{lambda}, coefficient) pair.
+A \code{data.frame} of class \code{c("capnet_path", "data.frame")}
+with one row per point on the path. The first column is the path parameter
+(\code{"lambda (log)"}, \code{"gamma (log)"}, or \code{"alpha"}); the
+remaining \eqn{p} columns are fitted coefficients, named from
+\code{colnames(X)} when available. Exactly one of \code{lambda},
+\code{gamma}, \code{alpha} may be a vector; the other two must be scalars.
 }
 \description{
 Computes fitted coefficients from \code{capnet()} along a path of
@@ -55,20 +59,22 @@ Computes fitted coefficients from \code{capnet()} along a path of
 inspecting coefficient shrinkage and entry/exit as regularization increases.
 }
 \details{
-For each \code{lambda} in the supplied vector, \code{capnet()} is fit with
-fixed \code{alpha}, \code{gamma}, and \code{L}, and the resulting coefficients
-are collected. If feature names are available from \code{colnames(X)}, they
-are used as column names.
+For each point on the path, \code{capnet()} is fit with the remaining two
+hyperparameters held fixed, and the resulting coefficients are collected.
+Lambda and gamma paths use \code{log()} of the parameter value as the first
+column (suitable for log-scale x-axis); the alpha path uses the raw value.
+Pass the result to \code{plot()} to visualize the coefficient paths.
 }
 \examples{
 set.seed(1)
 n <- 50; p <- 8
 X <- matrix(rnorm(n * p), n, p)
-colnames(X) <- paste0("x", 1:p)
+colnames(X) <- paste0("x", seq_len(p))
 beta <- c(1.5, 0.8, 0.2, rep(0, p - 3))
 y <- as.numeric(X \%*\% beta + rnorm(n))
 path <- coef_path(X, y, L = 0.5, alpha = 0.5,
                   lambda = exp(seq(1, -5, length.out = 50)), gamma = 1)
+plot(path)
 }
 \seealso{
 \code{\link[=capnet]{capnet()}}, \code{\link[=plot.capnet_path]{plot.capnet_path()}}

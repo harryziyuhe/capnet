@@ -17,7 +17,16 @@
   # into a concrete value bound in FUN's own frame) before FUN is serialized.
   .capnet_force_env(environment(FUN))
 
-  workers <- workers %||% max(1, parallel::detectCores() - 1)
+  # Cap workers at: (a) number of tasks — no gain from extra idle workers,
+  # (b) detectCores() - 1, (c) 90 — R allows 128 connections total; stdin/
+  # stdout/stderr consume 3, each PSOCK worker takes 1, and other connections
+  # (files, sockets) may be open, so stay well clear of the 125 headroom.
+  n_tasks <- length(X)
+  workers <- min(
+    workers %||% max(1L, parallel::detectCores() - 1L),
+    n_tasks,
+    90L
+  )
   cl <- parallel::makeCluster(workers)
   on.exit(parallel::stopCluster(cl), add = TRUE)
 

@@ -2,21 +2,40 @@
 % Please edit documentation in R/methods.R
 \name{print.capnet_violations}
 \alias{print.capnet_violations}
-\title{Print the violation matrix from \code{capnet_violations} object}
+\title{Print the violation matrix from a \code{capnet_violations} object}
 \usage{
 \method{print}{capnet_violations}(x, ...)
 }
 \arguments{
-\item{x}{A fitted object of class \code{"capnet_violations"}.}
+\item{x}{An object of class \code{"capnet_violations"} returned by
+\code{capnet_violations()}.}
 
-\item{...}{Further arguments passed to or from other methods.}
+\item{...}{Optional arguments forwarded to \code{Matrix::printSpMatrix()},
+e.g. \code{col.names}, \code{digits}, \code{align}.}
 }
 \value{
-Sparse numeric matrix of contribution cap violations in fitted object x
+\code{x}, invisibly.
 }
 \description{
-Print the violation matrix from \code{capnet_violations} object
+Print the violation matrix from a \code{capnet_violations} object
+}
+\details{
+Displays the excess-contribution matrix as a sparse matrix: only non-zero
+entries (i.e., actual cap violations) are printed. Each non-zero entry
+gives the amount by which \eqn{|z_{ij}\hat\beta_j|} exceeded \eqn{L_j}
+for that row-feature combination.
+}
+\examples{
+set.seed(1)
+n <- 40; p <- 5
+X <- matrix(rnorm(n * p), n, p)
+y <- as.numeric(X \%*\% c(2, -1.5, 0, 0, 0) + rnorm(n))
+fit <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 0.1, L = 0.5)
+v <- capnet_violations(fit)
+if (!is.null(v)) print(v)         # sparse display of excess contributions
+if (!is.null(v)) v$excess[1:5, ]  # raw access
+
 }
 \seealso{
-\code{\link[=capnet_violations]{capnet_violations()}}, \code{\link[=print]{print()}}
+\code{\link[=capnet_violations]{capnet_violations()}}, \code{\link[=capnet]{capnet()}}
 }

@@ -9,14 +9,28 @@
 \arguments{
 \item{object}{A fitted object of class \code{"walk_capnet"}.}
 
-\item{...}{Further arguments passed to or from other methods.}
+\item{...}{Currently unused.}
 }
 \value{
-Numeric vector (or matrix) of predictions stored in object
+A \eqn{\mathrm{nrow}(z)\times 1} matrix (or \code{xts} if the
+input \code{z} was \code{xts}) of predictions on the response scale,
+as computed during the walk-forward evaluation. \code{NA} entries indicate
+steps where the optimizer failed to converge. To extract the full
+coefficient path, use \code{coef(object)}.
 }
 \description{
 Predict from a walk-forward \code{capnet} fit
 }
+\examples{
+set.seed(1)
+n <- 50; p <- 5; n_new <- 8
+X <- matrix(rnorm(n * p), n, p)
+z <- matrix(rnorm(n_new * p), n_new, p)
+y <- as.numeric(X \%*\% c(1, -1, 0.5, 0, 0) + rnorm(n))
+fit <- walk_capnet(X, y, L = 1, z = z, lambda = 0.1, alpha = 0.5, gamma = 1)
+predict(fit)
+
+}
 \seealso{
-\code{\link[=walk_capnet]{walk_capnet()}}, \code{\link[=predict]{predict()}}
+\code{\link[=walk_capnet]{walk_capnet()}}, \code{\link[=coef.walk_capnet]{coef.walk_capnet()}}
 }

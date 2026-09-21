@@ -1,17 +1,25 @@
 #' Extract coefficients from a fitted \code{capnet} model
-#' 
+#'
 #' Returns the estimated intercept and coefficients from a fitted
 #' \code{capnet} model object.
-#' 
+#'
 #' @param object A fitted object of class \code{"capnet"}.
 #' @param ... Further arguments passed to or from other methods.
 #'
-#' @return
-#' A named numeric vector (or single-column matrix) containing the intercept
-#' followed by the fitted coefficients, labeled with their corresponding
-#' variable names.
+#' @return A \eqn{(1+p)\times 1} numeric matrix. The first row is the
+#'  intercept (named \code{"(Intercept)"}); the remaining \eqn{p} rows are
+#'  the fitted slopes, named from \code{colnames(X)} when available.
 #'
-#' @seealso [capnet()], [predict()] [predict.capnet()]
+#' @seealso [capnet()], [predict.capnet()]
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 40; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' y <- as.numeric(X %*% c(1, -1, 0.5, 0, 0) + rnorm(n))
+#' fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
+#' coef(fit)          # (1 + p) x 1 matrix
+#' coef(fit)[-1, ]    # slopes only
 #'
 #' @export
 #' @method coef capnet
@@ -25,14 +33,29 @@ coef.capnet <- function(object, ...) {
 #' Extract coefficient paths from a walk-forward \code{capnet} fit
 #'
 #' @param object A fitted object of class \code{"walk_capnet"} returned by
-#'  \code{walk_capnet()}
-#' @param index Optional integer vector of rows/steps to return
+#'  \code{walk_capnet()}.
+#' @param index Optional integer vector of step indices (1 to \code{nrow(z)})
+#'  to subset. If \code{NULL}, all steps are returned.
 #' @param ... Further arguments passed to or from other methods.
 #'
-#' @return A numeric matrix whose first column is the intercept path and the
-#'  remaining columns are coefficient paths.
+#' @return A \eqn{\mathrm{nrow}(z)\times(1+p)} matrix (or \code{xts} if the
+#'  input \code{z} was \code{xts}). The first column is the intercept path
+#'  (named \code{"intercept"}); the remaining \eqn{p} columns are coefficient
+#'  paths named from \code{colnames(X)}. Rows within the same walk step share
+#'  identical values. \code{NA} rows indicate steps that failed to converge.
+#'  If \code{index} is supplied, only those rows are returned.
 #'
-#' @seealso [walk_capnet()], [predict()], [predict.walk_capnet()]
+#' @seealso [walk_capnet()], [predict.walk_capnet()]
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 50; p <- 5; n_new <- 8
+#' X <- matrix(rnorm(n * p), n, p)
+#' z <- matrix(rnorm(n_new * p), n_new, p)
+#' y <- as.numeric(X %*% c(1, -1, 0.5, 0, 0) + rnorm(n))
+#' fit <- walk_capnet(X, y, L = 1, z = z, lambda = 0.1, alpha = 0.5, gamma = 1)
+#' coef(fit)           # nrow(z) x (1 + p) path
+#' coef(fit, index = 1:3)  # first three steps only
 #'
 #' @export
 #' @method coef walk_capnet
@@ -45,18 +68,38 @@ coef.walk_capnet <- function(object, index = NULL, ...) {
 }
 
 #' Predict from a fitted \code{capnet} model
-#' 
-#' @param object A fitted object of class \code{"capnet"}
-#' @param newdata Optional numeric matrix for prediction. If \code{NULL}, uses
-#'  \code{object$z} (the evaluation matrix stored at fit time).
-#' @param type "link" returns linear predictor eta; "response" returns mean mu.
+#'
+#' @param object A fitted object of class \code{"capnet"}.
+#' @param newdata Optional numeric matrix with \eqn{p} columns for prediction.
+#'  If \code{NULL}, uses \code{object$z} (the evaluation matrix stored at fit
+#'  time).
+#' @param type Character; \code{"link"} returns the linear predictor
+#'  \eqn{\hat\eta = \hat\beta_0 + X\hat\beta}; \code{"response"} applies the
+#'  inverse link function and returns the fitted mean \eqn{\hat\mu}. For
+#'  Gaussian models the two are identical. Default \code{"link"}.
 #' @param ... Further arguments passed to or from other methods.
 #'
-#' @return Numeric vector of predictions (length = number of rows in
-#'  \code{newdata} or \code{object$z}).
-#'  
-#' @seealso [capnet()], [predict()]  
-#'  
+#' @return Numeric vector of length \code{nrow(newdata)} (or \code{nrow(z)} if
+#'  \code{newdata} is \code{NULL}).
+#'
+#' @details
+#' When \code{newdata = NULL}, predictions are made on \code{object$z}, which
+#' is the evaluation matrix used when the model was fit. This is convenient for
+#' inspecting fitted contributions without re-specifying the data. When
+#' \code{newdata} is supplied it must have exactly \eqn{p} columns (matching
+#' \code{length(object$beta)}) but may have any number of rows.
+#'
+#' @seealso [capnet()], [coef.capnet()]
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 40; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' y <- as.numeric(X %*% c(1, -1, 0.5, 0, 0) + rnorm(n))
+#' fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
+#' predict(fit, type = "response")            # fitted values on training z
+#' predict(fit, newdata = X, type = "link")   # linear predictor on new data
+#'
 #' @export
 #' @method predict capnet
 predict.capnet <- function(object, newdata  = NULL, type = c("link", "response"), ...) {
@@ -91,13 +134,26 @@ predict.capnet <- function(object, newdata  = NULL, type = c("link", "response")
 }
 
 #' Predict from a walk-forward \code{capnet} fit
-#' 
+#'
 #' @param object A fitted object of class \code{"walk_capnet"}.
-#' @param ... Further arguments passed to or from other methods.
+#' @param ... Currently unused.
 #'
-#' @return Numeric vector (or matrix) of predictions stored in object
+#' @return A \eqn{\mathrm{nrow}(z)\times 1} matrix (or \code{xts} if the
+#'  input \code{z} was \code{xts}) of predictions on the response scale,
+#'  as computed during the walk-forward evaluation. \code{NA} entries indicate
+#'  steps where the optimizer failed to converge. To extract the full
+#'  coefficient path, use \code{coef(object)}.
 #'
-#' @seealso [walk_capnet()], [predict()]
+#' @seealso [walk_capnet()], [coef.walk_capnet()]
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 50; p <- 5; n_new <- 8
+#' X <- matrix(rnorm(n * p), n, p)
+#' z <- matrix(rnorm(n_new * p), n_new, p)
+#' y <- as.numeric(X %*% c(1, -1, 0.5, 0, 0) + rnorm(n))
+#' fit <- walk_capnet(X, y, L = 1, z = z, lambda = 0.1, alpha = 0.5, gamma = 1)
+#' predict(fit)
 #'
 #' @export
 #' @method predict walk_capnet
@@ -115,7 +171,36 @@ predict.walk_capnet <- function(object, ...) {
 #'  at this lambda.
 #' @param ... Further arguments passed to or from other methods.
 #'
-#' @return The \code{x} (invisibly). The function prints a ggplot.
+#' @return The \code{ggplot} object, returned invisibly. As a side effect the
+#'  plot is printed to the current graphics device.
+#'
+#' @details
+#' Three display modes depending on which arguments are supplied:
+#' \describe{
+#'   \item{Neither \code{alpha} nor \code{lambda}}{Heatmap of ranked mean CV
+#'     errors across the full \eqn{\alpha\times\lambda} grid. Lighter fill =
+#'     better rank. Useful for identifying the most promising region before
+#'     inspecting slices.}
+#'   \item{\code{alpha} specified}{Line plot of mean CV error (± 1 SE across
+#'     folds) vs \eqn{\log\lambda} at the given \eqn{\alpha}. A dashed
+#'     vertical line marks the best \eqn{\lambda}.}
+#'   \item{\code{lambda} specified}{Line plot of mean CV error (± 1 SE) vs
+#'     \eqn{\alpha} at the given \eqn{\lambda}.}
+#' }
+#' Supply at most one of \code{alpha} and \code{lambda}; both must be values
+#' that appear in the searched grid.
+#'
+#' @examples
+#' \dontrun{
+#'   set.seed(1)
+#'   n <- 80; p <- 10
+#'   X <- matrix(rnorm(n * p), n, p)
+#'   y <- as.numeric(X %*% c(rep(1, 3), rep(0, p - 3)) + rnorm(n))
+#'   cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
+#'   plot(cv)                        # full heatmap
+#'   plot(cv, alpha = cv$best_alpha) # error vs lambda slice
+#'   plot(cv, lambda = cv$best_lambda) # error vs alpha slice
+#' }
 #'
 #' @importFrom ggplot2 ggplot aes geom_tile labs theme_minimal scale_fill_viridis_c
 #' @importFrom ggplot2 stat_summary geom_vline mean_se
@@ -210,11 +295,30 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
 
 #' Plot coefficient paths along a single hyperparameter
 #'
-#' @param x A data.frame or matrix where the first column is the path
-#'   parameter (e.g., \code{lambda}) and the remaining columns are coefficients.
+#' @param x An object of class \code{"capnet_path"} returned by
+#'  \code{coef_path()}, or any \code{data.frame} with the same structure:
+#'  first column is the path parameter, remaining columns are coefficients.
 #' @param ... Further arguments passed to or from other methods.
 #'
-#' @return The \code{ggplot} is printed; the plot x is returned invisibly.
+#' @return The \code{ggplot} object, returned invisibly. As a side effect the
+#'  plot is printed to the current graphics device.
+#'
+#' @details
+#' Produces a line plot with the path parameter on the x-axis (log scale for
+#' \code{lambda} and \code{gamma} paths, linear for \code{alpha}) and
+#' coefficient values on the y-axis. Each feature is drawn as a separate
+#' colored line, making it easy to see which coefficients enter, shrink, or
+#' change sign along the path.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 50; p <- 6
+#' X <- matrix(rnorm(n * p), n, p)
+#' colnames(X) <- paste0("x", seq_len(p))
+#' y <- as.numeric(X %*% c(1.5, -1, 0.5, 0, 0, 0) + rnorm(n))
+#' path <- coef_path(X, y, L = 0.5, alpha = 0.5,
+#'                   lambda = exp(seq(1, -5, length.out = 30)), gamma = 1)
+#' plot(path)
 #'
 #' @importFrom ggplot2 ggplot aes geom_line labs theme_minimal theme_bw theme element_text
 #' @importFrom rlang .data
@@ -242,17 +346,34 @@ plot.capnet_path <- function(x, ...) {
   invisible(p)
 }
 
-#' Print the violation matrix from \code{capnet_violations} object
-#' 
-#' @param x A fitted object of class \code{"capnet_violations"}.
-#' @param ... Further arguments passed to or from other methods.
-#' 
+#' Print the violation matrix from a \code{capnet_violations} object
+#'
+#' @param x An object of class \code{"capnet_violations"} returned by
+#'  \code{capnet_violations()}.
+#' @param ... Optional arguments forwarded to \code{Matrix::printSpMatrix()},
+#'  e.g. \code{col.names}, \code{digits}, \code{align}.
+#'
+#' @return \code{x}, invisibly.
+#'
+#' @details
+#' Displays the excess-contribution matrix as a sparse matrix: only non-zero
+#' entries (i.e., actual cap violations) are printed. Each non-zero entry
+#' gives the amount by which \eqn{|z_{ij}\hat\beta_j|} exceeded \eqn{L_j}
+#' for that row-feature combination.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 40; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' y <- as.numeric(X %*% c(2, -1.5, 0, 0, 0) + rnorm(n))
+#' fit <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 0.1, L = 0.5)
+#' v <- capnet_violations(fit)
+#' if (!is.null(v)) print(v)         # sparse display of excess contributions
+#' if (!is.null(v)) v$excess[1:5, ]  # raw access
+#'
+#' @seealso [capnet_violations()], [capnet()]
+#'
 #' @importFrom Matrix Matrix printSpMatrix
-#' 
-#' @return Sparse numeric matrix of contribution cap violations in fitted object x
-#' 
-#' @seealso [capnet_violations()], [print()]
-#' 
 #' @export
 #' @method print capnet_violations
 print.capnet_violations <- function(x, ...) {

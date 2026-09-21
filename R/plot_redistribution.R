@@ -9,10 +9,12 @@
 #' @importFrom stats reorder
 #' @importFrom utils head
 #'
-#' @param uncapped An object returned by \code{capnet()} fit without a 
-#'  contribution cap(i.e., \code{gamma = 0} or large \code{L}).
-#' @param capped An object returned by \code{capnet()} fit with contribution
-#'  caps applied.
+#' @param uncapped A \code{"capnet"} object fit without an active contribution
+#'  cap (typically \code{gamma = 0}), serving as the baseline.
+#' @param capped A \code{"capnet"} object fit to the same \code{X} and
+#'  \code{y} with contribution caps applied (\code{gamma > 0} and finite
+#'  \code{L}). Both models should use the same evaluation matrix \code{z}
+#'  so that contributions are comparable.
 #' @param X Optional numeric matrix of features used to compute contributions.
 #'  If \code{NULL}, the function uses \code{capped$z}.
 #' @param multiplier Optional numeric scalar or length-\eqn{n} vector of 
@@ -39,10 +41,14 @@
 #' \code{list("beta" = p1, "contribution" = p2)}
 #' 
 #' @details
-#' Contributions are calculated as column-wise products
-#' \eqn{contrib_j=\mathrm{mean}(X_{\cdot j})\times\beta_j\times multiplier_j}.
-#' 
-#' @seealso [capnet()]
+#' For each model, per-row contributions are computed as
+#' \eqn{contrib_{ij} = X_{ij}\hat\beta_j \times multiplier_i}; the displayed
+#' contribution for feature \eqn{j} is the mean over rows:
+#' \eqn{\bar{contrib}_j = \mathrm{mean}_i(X_{ij}\hat\beta_j \times multiplier_i)}.
+#' The \code{multiplier} from the \code{capped} model is used; if the two models
+#' were fit with different multipliers the comparison may be misleading.
+#'
+#' @seealso [capnet()], [capnet_violations()]
 #' 
 #' @examples
 #' set.seed(1)
