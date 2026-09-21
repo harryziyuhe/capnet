@@ -25,7 +25,8 @@
 #' @method coef capnet
 coef.capnet <- function(object, ...) {
   coefs <- matrix(c(object$a0, object$beta), ncol = 1)
-  rownames(coefs) <- c("(Intercept)", names(object$beta))
+  beta_names <- names(object$beta) %||% paste0("V", seq_along(object$beta))
+  rownames(coefs) <- c("(Intercept)", beta_names)
   colnames(coefs) <- "beta"
   coefs
 }
