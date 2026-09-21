@@ -20,11 +20,11 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \title{\pkg{capnet}: Contribution-Capped Regularization for Elastic Net Models in R}
 
-\author{
-  %%Harry He\\UC San Diego
-}
+\author{Harry He\\University of California, San Diego
+   \And Petri Fast\\ Hull Tactical Asset Allocation
+   \\}
 
-\Plainauthor{Harry He}
+\Plainauthor{Harry He, Petri Fast}
 \Plaintitle{\pkg{capnet}: Contribution-Capped Regularization for Elastic Net Models in R}
 \Shorttitle{\pkg{capnet}: Contribution-Capped Regularization}
 
@@ -34,6 +34,12 @@
 
 \Keywords{regularization, constrained optimization, elastic net, R}
 \Plainkeywords{regularization, constrained optimization, elastic net, R}
+
+\Address{
+  Harry He\\
+  University of California, San Diego\\
+  E-mail: \email{zih028@ucsd.edu}
+}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Start Document
@@ -226,20 +232,21 @@ The \pkg{capnet} package supports model families for which the negative log-like
 
 For Gaussian regression with identity link, the negative log-likelihood is
 \[
-\ell(y,\beta, X) = \frac{1}{2}\|y - X\beta\|_2^2.
+\ell(y,\beta, X) = \frac{1}{2n}\|y - X\beta\|_2^2.
 \]
 For logistic regression (binomial with logit link),
 \[
-\ell(y,\beta,X) = \sum_{i=1}^n \left[ \log\!\left(1 + e^{x_i\beta}\right) - y_ix_i\beta \right].
+\ell(y,\beta,X) = \frac{1}{n}\sum_{i=1}^n \left[ \log\!\left(1 + e^{x_i\beta}\right) - y_ix_i\beta \right].
 \]
 For Poisson regression with log link,
 \[
-\ell(\beta) = \sum_{i=1}^n \left( e^{x_i\beta} - y_i x_i\beta \right).
+\ell(\beta) = \frac{1}{n}\sum_{i=1}^n \left( e^{x_i\beta} - y_i x_i\beta \right).
 \]
 For Gamma regression with log link and fixed shape parameter,
 \[
-\ell(\beta) = \sum_{i=1}^n \left( y_i e^{-x_i\beta} + x_i\beta \right).
+\ell(\beta) = \frac{1}{n}\sum_{i=1}^n \left( y_i e^{-x_i\beta} + x_i\beta \right).
 \]
+Each likelihood above is expressed as an average over the $n$ training observations, consistent with how \pkg{capnet} normalizes the likelihood term internally.
 
 These families cover the most commonly used GLMs in applied work and share a convenient structure: the likelihood depends on $\beta$ only through the linear predictor $X\beta$ and yields a convex optimization landscape. This property allows \pkg{capnet} to incorporate additional penalties without altering the fundamental estimation framework.
 
@@ -255,14 +262,18 @@ Z_{ij}\beta_j.
 \[
 |Z_{ij}\beta_j| \le L_j,
 \]
-where $L_j > 0$ is a user-specified cap. Violations of this constraint are penalized through the smooth hinge-squared penalty
+where $L_j > 0$ is a user-specified cap.
+
+In addition to $L$, \pkg{capnet} allows an optional row-wise multiplier $w \in \mathbb{R}_{+}^m$ (default $w_i = 1$ for all $i$; this is the \code{multiplier} argument of \code{capnet()}, distinct from the scalar cap multiplier used to construct $L$ in the illustrative simulation of Section~\ref{sec:motivate}) that rescales contributions during cap enforcement only, without entering the likelihood term above; this is useful when the same nominal cap should apply after accounting for observation-specific scaling (e.g., differing notional or exposure across evaluation rows). Violations of the resulting, possibly rescaled constraint are penalized through the smooth hinge-squared penalty, averaged over evaluation rows,
 \[
-C(\beta,Z,L)
+C(\beta,Z,L,w)
 =
-\sum_{j=1}^p\sum_{i=1}^m \left( |Z_{ij}\beta_j| - L_j \right)_+^2,
+\frac{1}{m}\sum_{j=1}^p\sum_{i=1}^m \left[\frac{\left( |w_iZ_{ij}\beta_j| - L_j \right)_+}{w_i}\right]^2,
 \qquad
 (z)_+ = \max(z,0).
 \]
+When $w_i = 1$ for all $i$ (the default), this reduces to
+$C(\beta,Z,L) = \frac{1}{m}\sum_{j=1}^p\sum_{i=1}^m\left(|Z_{ij}\beta_j| - L_j\right)_+^2$.
 
 This penalty activates only when the magnitude of a covariate’s contribution exceeds its cap and then grows quadratically. Because the hinge-squared function is continuously differentiable, it is directly compatible with gradient-based optimization methods.
 
@@ -280,7 +291,7 @@ The \pkg{capnet} estimator solves the convex optimization problem
     +
     \lambda\!\left[\frac{1-\alpha}{2}\|\beta\|_2^2 + \alpha\|\beta\|_1\right]
     +
-    \gamma\, C(\beta,Z,L)
+    \gamma\, C(\beta,Z,L,w)
 \right\}
 \label{eq:loss}
 \end{equation}
@@ -302,30 +313,30 @@ Calling the \pkg{lbfgs} optimizer requires the objective and gradient functions.
 +
 \lambda\Big[(1-\alpha)\beta + \alpha\,\partial\|\beta\|_1\Big]
 +
-\gamma\, \nabla C(\beta,Z,L)
+\gamma\, \nabla C(\beta,Z,L,w)
 \label{eq:gradient}
 \end{equation}
 
-The first component is the standard GLM score
-\[\nabla \ell(y,\beta,X)=X^\top(\mu - y),\qquad\mu = g^{-1}(X\beta)\]
+The first component is the standard GLM score, averaged over observations to match (\ref{eq:loss}),
+\[\nabla \ell(y,\beta,X)=\frac{1}{n}X^\top(\mu - y),\qquad\mu = g^{-1}(X\beta)\]
 And for the contribution-cap penalty, the gradient is
 \[
 \frac{\partial C}{\partial \beta_j}
 =
-2\sum_{i=1}^m\left(|Z_{ij}\beta_j| - L_j\right)_+
+\frac{2}{m}\sum_{i=1}^m\left[\frac{\left(|w_iZ_{ij}\beta_j| - L_j\right)_+}{w_i}\right]
 \cdot
-\mathrm{sign}(Z_{ij}\beta_j)
-Z_{ij}.
+\mathrm{sign}(w_iZ_{ij}\beta_j)
+\cdot Z_{ij}.
 \]
 The hinge-squared form ensures differentiability even at the activation boundary.
 
-Also define the contribution matrix as 
-\[A=Z\text{ diag}(\beta)\in\mathbb R^{m\times p}\]
-$S=\text{sign}(A)$ element-wise, and $V=(|A|-\bm{1}L^\top)_+$. The gradient of the contribution-cap penalty can be written in the following matrix form:
-\[\nabla_\beta C=2\Big((V\odot S)\odot Z\Big)^\top\bm{1}\in\mathbb R^p\]
-where $\odot$ is element-wise multiplication, and this is how the gradient calculation is performed in the \pkg{capnet} package.
+Also define the contribution matrix as
+\[A=\text{diag}(w)\,Z\,\text{diag}(\beta)\in\mathbb R^{m\times p}\]
+$S=\text{sign}(A)$ element-wise, and $V=\text{diag}(w)^{-1}\big(|A|-\bm{1}L^\top\big)_+$. The gradient of the contribution-cap penalty can be written in the following matrix form:
+\[\nabla_\beta C=\frac{2}{m}\Big((V\odot S)\odot Z\Big)^\top\bm{1}\in\mathbb R^p\]
+where $\odot$ is element-wise multiplication. This matches the gradient computed internally by the \pkg{capnet} package, up to one additional detail: when \code{standardize = TRUE} (the default), coefficients are optimized in standardized units for numerical conditioning, and this gradient is evaluated by first mapping $\beta$ back to the original, unstandardized scale via the corresponding chain rule.
 
-The evaluation matrix $Z$ enters the optimization only through the penalty term. Because $C(\beta,Z,L)$ decomposes additively over covariates, the cost of computing its gradient grows linearly in the number of rows of $Z$. This design allows users to specify large or diverse evaluation sets without affecting the GLM likelihood computation.
+The evaluation matrix $Z$ enters the optimization only through the penalty term. Because $C(\beta,Z,L,w)$ decomposes additively over covariates, the cost of computing its gradient grows linearly in the number of rows of $Z$. This design allows users to specify large or diverse evaluation sets without affecting the GLM likelihood computation.
 
 \section{Software Implementation and Example Usage}\label{sec:software}
 
@@ -348,10 +359,10 @@ The evaluation matrix $Z$ enters the optimization only through the penalty term.
     \label{tab:capnet-functions}
 \end{table}
 
-This section provides a simple illustration of using the \pkg{capnet} package to fit the contribution-capped elastic net regression models. We will mostly consider the linear regression model and then briefly discuss extensions to the logistic, Poisson, and gamma regression cases. The package is available from ... and can be installed and loaded in the usual manner:
+This section provides a simple illustration of using the \pkg{capnet} package to fit the contribution-capped elastic net regression models. We will mostly consider the linear regression model and then briefly discuss extensions to the logistic, Poisson, and gamma regression cases. The package is available from GitHub at \url{https://github.com/harryziyuhe/capnet} and can be installed via the \pkg{remotes} package and loaded in the usual manner:
 
 \begin{Code}
-    R> install.packages("capnet")
+    R> remotes::install_github("harryziyuhe/capnet")
     R> library("capnet")
 \end{Code}
 
@@ -592,6 +603,7 @@ Every function illustrated above extends unchanged to the logistic, Poisson, and
 
 \begin{Code}
     R> set.seed(123)
+    R> alpha <- 0.5; lambda <- 0.1; gamma <- 1
     R> data_pois <- simulate_capnet_data(n = 100, p = 10, m = 20,
     +     family = "poisson")
     R> X <- data_pois$X; y <- data_pois$y; L <- data_pois$L; Z <- data_pois$Z
@@ -640,7 +652,7 @@ Because the log link is used, \code{predict(fit\_pois, newdata = Z, type = "resp
 
 An important application of \pkg{capnet} arises in quantitative finance, where feature variables frequently exhibit heavy-tailed distributions and episodic extremes. In such environments, standard linear models can produce unstable and economically undesirable predictions, as a small number of extreme feature realizations may dominate the model output. From a portfolio construction perspective, this translates into concentrated exposures and fragile positions that are highly sensitive to outliers. Risk managers may be concerned with these dynamics, as they can lead to unintended bets, amplified drawdowns, and poor tail-risk properties. In practice, portfolio managers often impose explicit constraints---such as position limits, exposure caps, or risk budgets---to control the influence of individual signals. These constraints reflect a preference for diversification not only at the portfolio level but also at the level of predictive signals. However, conventional penalized regression methods (e.g., ridge or elastic net) shrink coefficients uniformly and do not directly control the realized contribution of each feature. As a result, even regularized models can produce predictions dominated by a single extreme feature when its realized value is large. The contribution-based framework implemented in \pkg{capnet} directly addresses this issue by penalizing excessive feature contributions, thereby aligning statistical estimation with practical risk management objectives. The time-series nature of financial data further necessitates rolling estimation procedures, for which the walk-forward implementation \code{walk_capnet} is particularly well suited.
 
-To illustrate the empirical performance of \pkg{capnet}, we use data from the \href{https://www.kaggle.com/competitions/hull-tactical-market-prediction}{Hull Tactical Market Prediction Kaggle competition}. This dataset contains daily observations combining publicly available market data with proprietary features designed to predict excess returns of the S\&P 500. Following the variable selection of the competition’s baseline model, we construct a backtesting pipeline to evaluate alternative approaches to imposing contribution caps within a linear modeling framework.
+To illustrate the empirical performance of \pkg{capnet}, we use data from the \href{https://www.kaggle.com/competitions/hull-tactical-market-prediction}{Hull Tactical Market Prediction Kaggle competition}. This dataset contains daily observations combining publicly available market data with proprietary features designed to predict excess returns of the S\&P 500. Following the variable selection of the competition’s baseline model, we construct a backtesting pipeline to evaluate alternative approaches to imposing contribution caps within a linear modeling framework. For reproducibility, a copy of this dataset is bundled with the package as \code{inst/extdata/data.csv}, and the full backtesting pipeline used in this section is provided as the package vignette \code{vignette("example_elan", package = "capnet")}.
 
 \begin{table}[ht]
 \centering
@@ -753,7 +765,7 @@ From a computational perspective, \code{capnet} achieves runtime comparable to \
 
 A second application of \pkg{capnet} arises in forecasting aggregate web traffic from a panel of individual, heavy-tailed content-level pageview series. Article-level popularity on the web is well documented to be Zipf-like and heavy-tailed. On any given day, small number of pages can go viral and receive orders of magnitude more traffic than usual \citep{crovella1997}. Within this setting, conventional penalization tools such as $\ell_1$ and $\ell_2$ norms do little to constrain the spikes in feature level contributions that can dominate the forecast and hamper predictive performance.
 
-To illustrate this, we use daily English Wikipedia pageviews (January 1, 2022 through December 31, 2024) for 30 widely-read articles spanning major technology companies, artificial-intelligence and cryptocurrency topics, and prominent public figures, obtained from the public Wikimedia Pageviews REST API. The response is next-day total pageviews summed across all 30 articles; the covariates are each article's own pageviews (in thousands of views) on the current day. Table~\ref{tab:wiki_variable} reports summary statistics for a representative subset of the covariate panel. Most articles here exhibit extreme leptokurtosis. \code{Microsoft} and \code{Youtube} in particular have excess kurtosis several orders of magnitude larger than any variable in Table~\ref{tab:variable}.
+To illustrate this, we use daily English Wikipedia pageviews (January 1, 2022 through December 31, 2024) for 30 widely-read articles spanning major technology companies, artificial-intelligence and cryptocurrency topics, and prominent public figures, obtained from the public Wikimedia Pageviews REST API. The response is next-day total pageviews summed across all 30 articles; the covariates are each article's own pageviews (in thousands of views) on the current day. Table~\ref{tab:wiki_variable} reports summary statistics for a representative subset of the covariate panel. Most articles here exhibit extreme leptokurtosis. \code{Microsoft} and \code{Youtube} in particular have excess kurtosis several orders of magnitude larger than any variable in Table~\ref{tab:variable}. For reproducibility, the processed daily panel is bundled with the package as \code{inst/extdata/wiki_traffic.csv}, and the full backtesting pipeline used in this section is provided as the package vignette \code{vignette("example_wiki", package = "capnet")}.
 
 \begin{table}[ht]
 \centering
