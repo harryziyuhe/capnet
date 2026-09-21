@@ -14,13 +14,16 @@ header-includes:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(glmnet)
+glmnet_ok <- requireNamespace("glmnet", quietly = TRUE)
+xtable_ok <- requireNamespace("xtable", quietly = TRUE)
+if (!glmnet_ok || !xtable_ok) knitr::opts_chunk$set(eval = FALSE)
+
 library(lbfgs)
-library(xtable)
 library(ggplot2)
 library(xts)
-library(knitr)
 library(capnet)
+if (glmnet_ok) library(glmnet)
+if (xtable_ok) library(xtable)
 options(scipen = 0)
 convergence.table <- NULL
 ```
@@ -291,12 +294,7 @@ run_one <- function(i) {
   )
 }
 
-cl <- parallel::makeCluster(n_runs)
-invisible(parallel::clusterEvalQ(cl, library(capnet)))
-parallel::clusterExport(cl, c("X", "y", "L", "maxx", "lambda_grid", "K"),
-                        envir = environment())
-results <- parallel::parLapply(cl, seq_len(n_runs), run_one)
-parallel::stopCluster(cl)
+results <- lapply(seq_len(n_runs), run_one)
 
 lambdas0    <- sapply(results, `[[`, "lambda0")
 lambdas01   <- sapply(results, `[[`, "lambda01")
