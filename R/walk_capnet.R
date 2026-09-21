@@ -38,7 +38,7 @@
 #'  scale feature contributions during the capping step. Defaults to 1.
 #' @param walk Positive integer; number of consecutive rows of \code{z}
 #'  predicted as a batch at each step. At step \eqn{s}, rows
-#'  \eqn{(s-1)\cdot\text{walk}+1} through \eqn{s\cdot\text{walk}} of \code{z}
+#'  \eqn{(s-1)\cdot\mathrm{walk}+1} through \eqn{s\cdot\mathrm{walk}} of \code{z}
 #'  are used to enforce the cap and generate predictions together. If
 #'  \code{nrow(z)} is not evenly divisible by \code{walk}, the last step
 #'  covers the remaining rows. Default \code{1} (one row per step).
@@ -85,7 +85,7 @@
 #' \code{y} are standardized (if requested) once, up front, and held fixed
 #' across all steps. At step \eqn{s=1,\dots,S}, \code{capnet()} is called
 #' internally on this fixed training fit, with the contribution-cap penalty
-#' restricted to rows \eqn{(s-1)\times\text{walk}:s\times\text{walk}} of
+#' restricted to rows \eqn{(s-1)\times\mathrm{walk}:s\times\mathrm{walk}} of
 #' \code{z}; because the cap penalty (and its gradient) depend on the
 #' evaluation slice, coefficients are genuinely re-optimized at each step, not
 #' merely re-evaluated. Penalizing a smaller, local slice of \code{z} instead
