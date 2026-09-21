@@ -103,19 +103,19 @@ prepare_data <- function(data_source = c("quickstart","proxy")) {
   test_X <- X[(split + 1):n, ]
   test_y <- y[(split + 1):n, , drop = FALSE]
   
-  mu <- 100
+  gamma <- 100
   if (data_source == "quickstart") {
     L <- runif(ncol(X), 0.8, 1.2)
   } else {
     kappa <- 0.1
     L <- kappa * apply(abs(train_X), 2, function(v) stats::quantile(v, 0.99))
   }
-  list(train_X = train_X, train_y = train_y, test_X = test_X, test_y = test_y, L = L, mu = mu)
+  list(train_X = train_X, train_y = train_y, test_X = test_X, test_y = test_y, L = L, gamma = gamma)
 }
 ```
 
 ```{r include = FALSE}
-fit_models <- function(train_X, train_y, test_X, L, mu) {
+fit_models <- function(train_X, train_y, test_X, L, gamma) {
   alphas <- c(0, 0.2, 0.4, 0.6, 0.8, 1)
   best_alpha <- 0
   best_lambda <- 0
@@ -144,8 +144,8 @@ fit_models <- function(train_X, train_y, test_X, L, mu) {
   new_pred_mean <- sum(enet_beta * colMeans(train_X))
   enet_beta0 <- enet_beta0 + (original_pred_mean - new_pred_mean)
   
-  cap1 <- capnet(train_X, train_y, L, lambda = best_lambda, alpha = best_alpha, mu = mu, standardize=FALSE)
-  cap2 <- walk_capnet(train_X, train_y, L, test_X, lambda = best_lambda, alpha = best_alpha, mu = mu, standardize=FALSE)
+  cap1 <- capnet(train_X, train_y, L, lambda = best_lambda, alpha = best_alpha, gamma = gamma, standardize=FALSE)
+  cap2 <- walk_capnet(train_X, train_y, L, test_X, lambda = best_lambda, alpha = best_alpha, gamma = gamma, standardize=FALSE)
   
   list(
     enet = list(beta0 = enet_beta0, beta = enet_beta),
@@ -170,7 +170,7 @@ The first example uses quick start example data from \texttt{glmnet}. Theoretica
 
 ```{r}
 ds_qs <- prepare_data("quickstart")
-fits_qs <- fit_models(ds_qs$train_X, ds_qs$train_y, ds_qs$test_X, ds_qs$L, ds_qs$mu)
+fits_qs <- fit_models(ds_qs$train_X, ds_qs$train_y, ds_qs$test_X, ds_qs$L, ds_qs$gamma)
 
 qs_enet_is <- mse_from_beta(ds_qs$train_X, ds_qs$train_y, fits_qs$enet$beta0, fits_qs$enet$beta)
 qs_cap1_is <- mse_from_beta(ds_qs$train_X, ds_qs$train_y, fits_qs$cap1$beta0, fits_qs$cap1$beta)
@@ -194,7 +194,7 @@ To illustrate the strength of the \texttt{capnet} model, I construct a synthetic
 
 ```{r}
 ds_px <- prepare_data("proxy")
-fits_px <- fit_models(ds_px$train_X, ds_px$train_y, ds_px$test_X, ds_px$L, ds_px$mu)
+fits_px <- fit_models(ds_px$train_X, ds_px$train_y, ds_px$test_X, ds_px$L, ds_px$gamma)
 
 px_enet_is <- mse_from_beta(ds_px$train_X, ds_px$train_y, fits_px$enet$beta0, fits_px$enet$beta)
 px_cap1_is <- mse_from_beta(ds_px$train_X, ds_px$train_y, fits_px$cap1$beta0, fits_px$cap1$beta)

@@ -104,6 +104,10 @@ default_L_formula <- function(train_use, target_col, feature_cols, y_train) {
   if (!isTRUE(parallel)) return(lapply(X, FUN))
 
   workers <- if (is.null(workers)) max(1, parallel::detectCores() - 1) else workers
+  # R's connection table holds 128 slots; leave 10 free for stdin/stdout/stderr
+  # and any other open connections. Never use more workers than tasks either.
+  safe_max <- max(1L, 128L - length(getAllConnections()) - 10L)
+  workers <- min(workers, length(X), safe_max)
   cl <- parallel::makeCluster(workers)
   on.exit(parallel::stopCluster(cl), add = TRUE)
 

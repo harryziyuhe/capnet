@@ -1,0 +1,242 @@
+---
+title: "Penalty Strength Studies"
+author: "Harry He"
+date: "2025-06-26"
+output: rmarkdown::html_vignette
+bibliography: references.bib
+vignette: >
+  %\VignetteIndexEntry{Penalty Strength Studies}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+header-includes:
+  - \usepackage{makecell}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(glmnet)
+library(lbfgs)
+library(xtable)
+library(ggplot2)
+library(capnet)
+options(scipen = 0)
+convergence.table <- NULL
+```
+
+### Contribution Cap Penalty
+
+The contribution cap optimizer introduces a new hyperparameter $\gamma$ in addition to the $\alpha$ and $\lambda$ parameters of the elastic net fitter. Because the new added contribution cap penalty term is smooth almost everywhere except at the border, a large or ill-conceived $\gamma$ value can for the line search algorithm in the underlying Orthant-Wise Limited-memory Quasi Newtonian (OWL-QN) method to fail, resulting in convergence issue. To prevent scaling mismatch between the contribution cap penalty term (which is designed to be in the original scale even when `standardize` is set to `TRUE`), I scale the contribution cap loss and gradient in the same unit as the rest of the loss and gradient functions in the `capnet()` function. Nevertheless, the algorithm can fail under some large $\gamma$ values, and the users should pay careful attention as the algorithm will not report a warning or error by default. The following code illustrates an example of how the optimizer reacts to different values of $\gamma$. Note that the available range of $\gamma$ is sensitive to the input data
+
+```{r data}
+example <- simulate_capnet_data()
+X <- example$X
+y <- example$y
+n <- nrow(X)
+p <- ncol(X)
+L <- example$L
+maxx <- t(as.matrix(apply(X, 2, function(x) {
+  mx <- max(x)
+  mn <- min(x)
+  if (abs(mx) > abs(mn)) mx else mn
+})))
+beta_init <- rep(0, p + 1)
+```
+
+The following table shows convergence results with eight different sets of parameter setups. The first model is a regular baseline model. The second model uses a larger $\lambda$ value for greater elastic net penalty. The third model sets $\lambda$ to $0$, removing the L1 and L2 regularization terms. Model 4 and 5 are ridge and LASSO models. Model 6 incorporates a larger multiplier term. Model 7 chooses a smaller contribution cap, forcing the parameters to be even smaller. The last model uses a different evaluation matrix, which takes the maximum absolute value. This forces the model to be essentially under the same constraint but shrinks the number of observation to one.
+
+```{r experiment, results = "asis"}
+for (i in seq(-5, 10)) {
+  # Regular model
+  model1 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  convergence1 <- model1$convergence
+
+  # Larger lambda model
+  model2 <- capnet(X, y, alpha = 0.5, lambda = 0.5,
+                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  convergence2 <- model2$convergence
+
+  # No elastic net penalty model
+  model3 <- capnet(X, y, alpha = 0.5, lambda = 0,
+                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  convergence3 <- model3$convergence
+
+  # Ridge regression model
+  model4 <- capnet(X, y, alpha = 0, lambda = 0.01,
+                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  convergence4 <- model4$convergence
+
+  # LASSO regression model
+  model5 <- capnet(X, y, alpha = 1, lambda = 0.01,
+                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  convergence5 <- model5$convergence
+
+  # Large multiplier model
+  model6 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 100)
+  convergence6 <- model6$convergence
+
+  # Small L model
+  model7 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 gamma = 10 ** i, L = L/2, z = X, standardize = TRUE, multiplier = 1)
+  convergence7 <- model7$convergence
+
+  # Different `z` model
+  model8 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
+                 gamma = 10 ** i, L = L, z = maxx, standardize = TRUE, multiplier = 1)
+  convergence8 <- model8$convergence
+  
+  convergence.table <- rbind(convergence.table,
+                             c(convergence1, convergence2,
+                               convergence3, convergence4,
+                               convergence5, convergence6,
+                               convergence7, convergence8))
+  
+}
+```
+
+```{r table, results='asis', echo=FALSE, message=FALSE, warning=FALSE}
+convergence.table <- as.data.frame(convergence.table)
+convergence.table[] <- lapply(convergence.table, as.character)
+convergence.table <- cbind(10 ** seq(-5, 10), convergence.table)
+colnames(convergence.table) <- c(
+  "Gamma",
+  "Base",
+  "Large Lambda",
+  "No Elastic Net",
+  "Ridge",
+  "LASSO",
+  "Large Multiplier",
+  "Small L",
+  "Single Max Row"
+)
+
+if (knitr::is_latex_output()) {
+  # Use xtable for LaTeX/PDF output
+  print(
+    xtable::xtable(convergence.table, display = c(rep("g", 10))),
+    math.style.exponents = TRUE,
+    sanitize.colnames.function = identity,
+    comment = FALSE
+  )
+} else {
+  # Use knitr::kable for HTML output
+  knitr::kable(convergence.table, format = "html")
+}
+```
+
+The table shows that most configurations tolerate a wide range of $\gamma$ values before failing. The failure threshold varies systematically across specifications for reasons rooted in the optimizer's sensitivity to sudden large gradient changes. The cap penalty gradient has the form
+
+$$\frac{2\gamma}{m} \sum_{i} e_{ij} \cdot \operatorname{sgn}(x_{ij}\hat\beta_j) \cdot \frac{x_{ij}}{\sigma_j}$$
+
+where $e_{ij} = \max(0,\,|x_{ij}\hat\beta_j| - L_j)$ is the per-observation cap excess and $m = \text{nrow}(\mathbf{z})$. When this gradient becomes very large relative to the likelihood gradient, L-BFGS and OWL-QN accumulate a corrupted inverse-Hessian approximation over successive iterations, causing the line search to fail.
+
+**Optimizer type (Ridge and No Elastic Net fail earliest).** The underlying optimizer is selected via `orthantwise_c` $= \lambda\alpha$ passed to `lbfgs()`. When $\alpha = 0$ (Ridge) or $\lambda = 0$ (No Elastic Net), `orthantwise_c` $= 0$ and the solver falls back to standard L-BFGS. All other configurations with $\alpha > 0$ and $\lambda > 0$ use OWL-QN, which enforces an orthant constraint at each step: coefficients cannot cross zero within a single iteration. This constraint bounds step sizes and prevents the large overshoots that corrupt the curvature history when $\gamma$ is large. L-BFGS has no such bound and therefore degrades faster, explaining why Ridge and No Elastic Net fail at lower $\gamma$ than the OWL-QN models.
+
+**Number of evaluation rows $m$ (Single Max Row fails earliest overall).** The cap gradient is divided by $m$, the number of rows in $\mathbf{z}$. With $m = n$ (models 1--7, $\mathbf{z} = X$), this average moderates the gradient magnitude: each observation contributes only $1/n$ of its excess to the gradient. With $m = 1$ (model 8, $\mathbf{z} = \mathbf{x}_{\max}$), the full excess of the single worst-case row enters the gradient undiluted, making the cap gradient $n$ times larger for the same $\gamma$. This is why model 8 fails at a $\gamma$ roughly $n$ times smaller than the baseline.
+
+**Effective cap threshold (Large Multiplier and Small L fail earlier).** A `multiplier` $> 1$ tightens the effective cap: the excess term becomes $\max(0,\,|\text{multiplier}_i \cdot x_{ij}\hat\beta_j| - L_j) / \text{multiplier}_i = \max(0,\,|x_{ij}\hat\beta_j| - L_j/\text{multiplier}_i)$, so `multiplier = 100` reduces the effective ceiling from $L_j$ to $L_j/100$. Similarly, halving $L$ (Small L) directly tightens the cap. Both changes produce more cap violations and larger excess values during optimization, increasing the cap gradient magnitude and lowering the failure threshold.
+
+**Regularization strength (Larger $\lambda$ tolerates higher $\gamma$).** Stronger elastic net regularization keeps $\hat\beta$ smaller throughout the optimization path, which reduces cap violations and therefore the magnitude of the cap gradient. A model with $\lambda = 0.5$ reaches the cap boundary later (at higher $\gamma$) than the baseline $\lambda = 0.01$, while $\lambda = 0$ (No Elastic Net) eliminates all coefficient-shrinkage pressure and increases violations, shifting the failure threshold downward.
+
+```{r lambda-values}
+K          <- 10L
+n_runs     <- 50L
+lambda_grid <- 10^seq(-11, -1, length.out = 6)
+
+run_one <- function(i) {
+  cv0 <- cv_capnet(X, y, gamma = 0, L = L,
+                   alpha = 0.5, lambda = lambda_grid,
+                   z = maxx, K = K, standardize = TRUE, multiplier = 1)
+  cv01 <- cv_capnet(X, y, gamma = 0.1, L = L,
+                    alpha = 0.5, lambda = lambda_grid,
+                    z = maxx, K = K, standardize = TRUE, multiplier = 1)
+  cv100 <- cv_capnet(X, y, gamma = 100, L = L,
+                      alpha = 0.5, lambda = lambda_grid,
+                      z = maxx, K = K, standardize = TRUE, multiplier = 1)
+
+  fit0 <- capnet(X, y, alpha = 0.5, lambda = cv0$best_lambda,
+                 gamma = 0, L = L, z = maxx, standardize = TRUE, multiplier = 1)
+  fit01 <- capnet(X, y, alpha = 0.5, lambda = cv01$best_lambda,
+                  gamma = 0.1, L = L, z = maxx, standardize = TRUE, multiplier = 1)
+  fit100 <- capnet(X, y, alpha = 0.5, lambda = cv100$best_lambda,
+                    gamma = 100, L = L, z = maxx, standardize = TRUE, multiplier = 1)
+
+  list(
+    lambda0    = cv0$best_lambda,    beta0    = as.numeric(fit0$beta),
+    lambda01   = cv01$best_lambda,   beta01   = as.numeric(fit01$beta),
+    lambda100 = cv100$best_lambda, beta100 = as.numeric(fit100$beta)
+  )
+}
+
+cl <- parallel::makeCluster(n_runs)
+invisible(parallel::clusterEvalQ(cl, library(capnet)))
+parallel::clusterExport(cl, c("X", "y", "L", "maxx", "lambda_grid", "K"),
+                        envir = environment())
+results <- parallel::parLapply(cl, seq_len(n_runs), run_one)
+parallel::stopCluster(cl)
+
+lambdas0    <- sapply(results, `[[`, "lambda0")
+lambdas01   <- sapply(results, `[[`, "lambda01")
+lambdas100  <- sapply(results, `[[`, "lambda100")
+
+betas0    <- do.call(rbind, lapply(results, `[[`, "beta0"))
+betas01   <- do.call(rbind, lapply(results, `[[`, "beta01"))
+betas100  <- do.call(rbind, lapply(results, `[[`, "beta100"))
+```
+
+```{r plot-lambda, echo = FALSE, fig.width=9, fig.height=5, out.width='100%'}
+best_lambdas <- as.data.frame(rbind(cbind(lambdas0, 0),
+                              cbind(lambdas01, 0.1),
+                              cbind(lambdas100, 100)))
+names(best_lambdas) <- c("lambda", "gamma")
+
+ggplot(best_lambdas) +
+  geom_density(aes(x = lambda, color = as.factor(gamma))) +
+  scale_x_continuous(trans='log10') +
+  labs(x = "Lambda", y = "Density", color = "gamma") +
+  theme_minimal()
+```
+
+As the above table has hinted at, the elastic net regularization and contribution cap constraints are correlated with each other despite serving different roles. The interaction effects matter during cross-validation as attempts to optimize multiple related constraints at the same time can produce unstable results and is therefore discouraged. As `cv_capnet` allows the user to tune `alpha` and `lambda` at the same time with specified `gamma`, I ran a few experiment with simulated data to show how introducing contribution caps can affect cross-validation results (especially on the optimal $\lambda$ values). Each experiment uses the largest feature row as the evaluation set to so contribution cap is guaranteed to be activated across all folds. When $\gamma$ is set to $0$ and the model defaults to a standard elastic net, the optimal $\lambda$ concentrates around $1e-3$. When a small $\gamma=0.01$ value is chosen, most cross-validation results do not exhibit strong peak behaviors but generally choose smaller $\lambda$ values. This can be understood as the model preferring contribution caps as the coefficient size constraint rather than $\ell_1 or \ell_2$ norms. When we choose a larger $\gamma$ value, however, the model displays an interesting behavior of picking either a small or a large $\lambda$ values as the optimal. This means that the model either relies on contribution caps to do most of the regularization or uses a stronger elastic net penalty to shrink the coefficients and therefore also controls realized contributions to some degree. Because the two penalties are correlated (stronger elastic net regularization shrinks feature coefficients and reduce excess contributions over caps), running cross-validation on optimal $\lambda$ values when contribution caps penalties are activated can lead to unstable results.
+
+
+### Coefficient stability across CV runs
+
+If different cross-validation runs produce different optimal $\lambda$ values when contribution caps penalties are activated, we might be worried about unstable downstream coefficient results. This, however, should not be a major concern. Although the interaction of elastic net and contribution caps penalty can produce unstable cross-validation parameters, the downstream model estimates are relatively stable. The following plot shows the coefficients from the experiment above. The solid line is the mean coefficient across 50 runs, and the confidence band (which is barely visible), reports the max and min coefficients across the 50 models.
+
+```{r beta-bands, echo = FALSE, fig.width = 9, fig.height = 5, out.width = '100%'}
+.beta_summary <- function(betas, gamma_label) {
+  data.frame(
+    feature = seq_len(ncol(betas)),
+    mean    = colMeans(betas),
+    lo      = apply(betas, 2, min),
+    hi      = apply(betas, 2, max),
+    gamma   = gamma_label
+  )
+}
+
+beta_df <- rbind(
+  .beta_summary(betas0,    "gamma = 0"),
+  .beta_summary(betas01,   "gamma = 0.1"),
+  .beta_summary(betas100,  "gamma = 100")
+)
+beta_df$gamma <- factor(beta_df$gamma,
+                        levels = c("gamma = 0", "gamma = 0.1", "gamma = 100"))
+
+ggplot(beta_df, aes(x = feature, y = mean, color = gamma, fill = gamma)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, color = NA) +
+  geom_line(linewidth = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+  scale_x_continuous(breaks = seq_len(max(beta_df$feature))) +
+  labs(x = "Feature", y = "Coefficient", color = NULL, fill = NULL) +
+  theme_bw(base_size = 14) +
+  theme(legend.position = "top", panel.grid.minor = element_blank())
+```
+
+
+
+
+
+
+
