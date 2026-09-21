@@ -13,5 +13,5 @@
 ^capnet_hex\.png$
 ^capnet\.png$
 ^\.latexmkrc$
-^parallel-cv-walk-summary\.md$
 ^vignettes/drafts/
+^vignettes/paper/
