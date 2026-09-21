@@ -14,3 +14,4 @@
 ^capnet\.png$
 ^\.latexmkrc$
 ^parallel-cv-walk-summary\.md$
+^vignettes/drafts/
