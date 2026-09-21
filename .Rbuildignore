@@ -8,6 +8,7 @@
 ^\.DS_Store$
 ^LICENSE\.md$
 ^manuscript$
+^UPDATE_LOG\.md$
 ^\.claude$
 ^CLAUDE\.md$
 ^capnet_hex\.png$
@@ -15,3 +16,4 @@
 ^\.latexmkrc$
 ^vignettes/drafts/
 ^vignettes/paper/
+^inst/extdata/
