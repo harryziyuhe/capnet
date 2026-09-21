@@ -42,7 +42,7 @@ Supply at most one of \code{alpha} and \code{lambda}; both must be values
 that appear in the searched grid.
 }
 \examples{
-\dontrun{
+\donttest{
   set.seed(1)
   n <- 80; p <- 10
   X <- matrix(rnorm(n * p), n, p)

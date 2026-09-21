@@ -101,7 +101,7 @@
 #' @seealso [capnet()], [walk_capnet()], [plot.cv_capnet()]
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #'   set.seed(1)
 #'   n <- 80; p <- 10
 #'   X <- matrix(rnorm(n * p), n, p)

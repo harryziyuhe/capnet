@@ -79,7 +79,7 @@ not change results. Default \code{FALSE}.}
 
 \item{workers}{Optional integer; number of parallel workers to use when
 \code{parallel = TRUE}. Defaults to \code{min(n_steps, detectCores() - 1,
- 90)}: capped at the number of walk steps (idle workers add no value) and
+90)}: capped at the number of walk steps (idle workers add no value) and
 at 90 to avoid exhausting R's 128-connection limit.}
 
 \item{...}{Additional arguments used in fitting. See \code{\link[=capnet]{capnet()}} for more details.}

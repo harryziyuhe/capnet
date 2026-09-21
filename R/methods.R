@@ -192,7 +192,7 @@ predict.walk_capnet <- function(object, ...) {
 #' that appear in the searched grid.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #'   set.seed(1)
 #'   n <- 80; p <- 10
 #'   X <- matrix(rnorm(n * p), n, p)

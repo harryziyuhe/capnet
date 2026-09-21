@@ -92,7 +92,7 @@ the previous \code{lambda}. Default \code{FALSE}.}
 
 \item{workers}{Optional integer; number of parallel workers to use when
 \code{parallel = TRUE}. Defaults to \code{min(n_tasks, detectCores() - 1,
- 90)}: capped at the number of (fold x alpha) tasks (idle workers add no
+90)}: capped at the number of (fold x alpha) tasks (idle workers add no
 value) and at 90 to avoid exhausting R's 128-connection limit.}
 
 \item{...}{Additional arguments forwarded to \code{capnet()}, e.g.,
@@ -142,7 +142,7 @@ test fold lies strictly after its training fold:
 }
 }
 \examples{
-\dontrun{
+\donttest{
   set.seed(1)
   n <- 80; p <- 10
   X <- matrix(rnorm(n * p), n, p)

@@ -14,39 +14,47 @@ export(cv_capnet)
 export(plot_redistribution)
 export(simulate_capnet_data)
 export(walk_capnet)
-importFrom(Matrix,Matrix)
-importFrom(Matrix,printSpMatrix)
-importFrom(ggplot2,aes)
-importFrom(ggplot2,coord_flip)
-importFrom(ggplot2,element_text)
-importFrom(ggplot2,geom_bar)
-importFrom(ggplot2,geom_col)
-importFrom(ggplot2,geom_line)
-importFrom(ggplot2,geom_tile)
-importFrom(ggplot2,geom_vline)
-importFrom(ggplot2,ggplot)
-importFrom(ggplot2,labs)
-importFrom(ggplot2,mean_se)
-importFrom(ggplot2,position_dodge)
-importFrom(ggplot2,scale_fill_viridis_c)
-importFrom(ggplot2,stat_summary)
-importFrom(ggplot2,theme)
-importFrom(ggplot2,theme_bw)
-importFrom(ggplot2,theme_minimal)
+importFrom(Matrix,
+  Matrix,
+  printSpMatrix
+)
+importFrom(ggplot2,
+  aes,
+  coord_flip,
+  element_text,
+  geom_bar,
+  geom_col,
+  geom_line,
+  geom_tile,
+  geom_vline,
+  ggplot,
+  labs,
+  mean_se,
+  position_dodge,
+  scale_fill_viridis_c,
+  stat_summary,
+  theme,
+  theme_bw,
+  theme_minimal
+)
 importFrom(lbfgs,lbfgs)
 importFrom(rlang,.data)
-importFrom(stats,cor)
-importFrom(stats,plogis)
-importFrom(stats,predict)
-importFrom(stats,qlogis)
-importFrom(stats,rbinom)
-importFrom(stats,reorder)
-importFrom(stats,rgamma)
-importFrom(stats,rnorm)
-importFrom(stats,rpois)
-importFrom(stats,runif)
-importFrom(stats,sd)
+importFrom(stats,
+  cor,
+  plogis,
+  predict,
+  qlogis,
+  rbinom,
+  reorder,
+  rgamma,
+  rnorm,
+  rpois,
+  runif,
+  sd
+)
 importFrom(utils,head)
-importFrom(xts,as.xts)
-importFrom(xts,is.xts)
+importFrom(xts,
+  as.xts,
+  is.xts
+)
 importFrom(zoo,index)
