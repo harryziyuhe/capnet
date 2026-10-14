@@ -6,6 +6,8 @@
 ^\.Rhistory$
 ^\.Rproj$
 ^\.DS_Store$
+^inst/\.DS_Store$
+^vignettes/\.Rhistory$
 ^LICENSE\.md$
 ^manuscript$
 ^UPDATE_LOG\.md$
@@ -18,3 +20,5 @@
 ^vignettes/paper/
 ^inst/extdata/
 ^cran-comments\.md$
+^CRAN_TODO\.md$
+^CRAN_CHECKLIST\.md$
