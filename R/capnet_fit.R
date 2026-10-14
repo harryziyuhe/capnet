@@ -170,7 +170,7 @@
       next
     }
 
-    if (max(abs(trial - x)) <= 1e-8 * (1 + max(abs(x)))) {
+    if (max(abs(trial - x)) <= train$tol * (1 + max(abs(x)))) {
       x <- trial
       value_x <- value_trial
       converged <- TRUE
