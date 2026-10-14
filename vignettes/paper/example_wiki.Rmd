@@ -80,7 +80,7 @@ wiki <- wiki |>
   arrange(date) |>
   mutate(target = dplyr::lead(total, 1)) |>
   filter(!is.na(target)) |>
-  mutate(across(all_of(articles), ~ . / 1000)) |>   # thousands of views
+  mutate(across(all_of(articles), ~ . / 1000)) |> # thousands of views
   select(date, target, all_of(articles))
 
 print(calc_moments(wiki[, articles]))
@@ -137,8 +137,8 @@ results <- rolling_enet(
   parallel = TRUE
 )
 
-combos <- results$predictions %>%
-  dplyr::distinct(method, gamma) %>%
+combos <- results$predictions |>
+  dplyr::distinct(method, gamma) |>
   dplyr::arrange(method, gamma)
 
 predictions <- list()
@@ -150,9 +150,9 @@ for (i in seq_len(nrow(combos))) {
   m <- combos$method[i]
   gamma_j <- combos$gamma[i]
 
-  predictions[[i]] <- results$predictions %>%
+  predictions[[i]] <- results$predictions |>
     dplyr::filter(method == m, gamma == gamma_j)
-  contributions[[i]] <- results$contributions %>%
+  contributions[[i]] <- results$contributions |>
     dplyr::filter(method == m, gamma == gamma_j)
   methods[i] <- m
   gamma_vals[i] <- gamma_j
@@ -191,8 +191,8 @@ best_gamma <- summary_table |>
 
 sel <- which(
   (methods == "Post-Fit Cap") |
-  (methods == "Uncapped") |
-  (methods == "Walk-forward Capnet" & gamma_vals == best_gamma)
+    (methods == "Uncapped") |
+    (methods == "Walk-forward Capnet" & gamma_vals == best_gamma)
 )
 
 rolling_list <- lapply(sel, function(i) {
@@ -205,7 +205,7 @@ rolling_list <- lapply(sel, function(i) {
   df
 })
 
-plot_df <- dplyr::bind_rows(rolling_list) %>%
+plot_df <- dplyr::bind_rows(rolling_list) |>
   dplyr::mutate(date = as.Date(date))
 
 walk_label <- paste0("Walk-forward Capnet (gamma=", best_gamma, ")")
@@ -222,7 +222,10 @@ ggplot(plot_df, aes(x = date, y = r2_roll, color = spec, group = spec)) +
   labs(
     x = "Date", y = expression(R^2), color = "Model",
     caption = sprintf(
-      "Y-axis truncated for readability; Uncapped's rolling R^2 reaches a minimum of %.0f.",
+      paste0(
+        "Y-axis truncated for readability; Uncapped's rolling R^2 ",
+        "reaches a minimum of %.0f."
+      ),
       min(plot_df$r2_roll[plot_df$spec == "Uncapped"])
     )
   ) +
@@ -244,7 +247,10 @@ max_col_idx <- max.col(abs(ref[, feat_start:ncol(ref)]), ties.method = "first")
 max_contributions <- lapply(sel, function(i) {
   df <- contributions[[i]]
   mat <- as.matrix(df)
-  max_col <- as.numeric(mat[cbind(seq_len(nrow(mat)), max_col_idx + feat_start - 1)])
+  max_col <- as.numeric(mat[cbind(
+    seq_len(nrow(mat)),
+    max_col_idx + feat_start - 1
+  )])
   df <- df[, 1:(feat_start - 1)]
   df$max_col <- max_col
   df$spec <- paste0(
@@ -254,7 +260,7 @@ max_contributions <- lapply(sel, function(i) {
   df
 })
 
-plot_df <- dplyr::bind_rows(max_contributions) %>%
+plot_df <- dplyr::bind_rows(max_contributions) |>
   dplyr::mutate(date = as.Date(date))
 
 ggplot(plot_df, aes(x = date, y = max_col, color = spec, group = spec)) +
@@ -265,7 +271,10 @@ ggplot(plot_df, aes(x = date, y = max_col, color = spec, group = spec)) +
     c("Uncapped", "Post-Fit Cap", walk_label)
   )) +
   scale_x_date(date_breaks = "3 months", date_labels = "%Y-%m") +
-  labs(x = "Date", y = "Maximum |contribution| (log-mean scale)", color = "Model") +
+  labs(
+    x = "Date", y = "Maximum |contribution| (log-mean scale)",
+    color = "Model"
+  ) +
   theme_bw(base_size = 16) +
   theme(
     legend.position = "top",
@@ -288,15 +297,15 @@ concentrating it in one article.
 
 ```{r, include = FALSE}
 make_feature_table <- function(df_list, target_date, df_names = NULL,
-                                feature_cols) {
+                               feature_cols) {
   if (is.null(df_names)) {
     df_names <- paste0("df", seq_along(df_list))
   }
 
   long_list <- lapply(seq_along(df_list), function(i) {
-    df_list[[i]] %>%
-      dplyr::filter(date == target_date) %>%
-      dplyr::select(dplyr::all_of(feature_cols)) %>%
+    df_list[[i]] |>
+      dplyr::filter(date == target_date) |>
+      dplyr::select(dplyr::all_of(feature_cols)) |>
       tidyr::pivot_longer(
         cols = dplyr::everything(),
         names_to = "feature",
@@ -304,7 +313,10 @@ make_feature_table <- function(df_list, target_date, df_names = NULL,
       )
   })
 
-  out <- Reduce(function(x, y) dplyr::left_join(x, y, by = "feature"), long_list)
+  out <- Reduce(
+    function(x, y) dplyr::left_join(x, y, by = "feature"),
+    long_list
+  )
   as.data.frame(out)
 }
 ```
@@ -316,9 +328,11 @@ far above any other feature, producing an implausible next-day forecast.
 
 ```{r contrib_table, result="asis"}
 tab <- make_feature_table(
-  df_list = list(contributions[[which(methods == "Uncapped")[1]]],
-                 contributions[[which(methods == "Post-Fit Cap")[1]]],
-                 contributions[[sel[length(sel)]]]),
+  df_list = list(
+    contributions[[which(methods == "Uncapped")[1]]],
+    contributions[[which(methods == "Post-Fit Cap")[1]]],
+    contributions[[sel[length(sel)]]]
+  ),
   target_date = as.Date("2023-03-14"),
   df_names = c("Uncapped", "Post-Fit Cap", walk_label),
   feature_cols = articles

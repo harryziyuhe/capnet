@@ -28,7 +28,7 @@ In many practical applications, it may be desirable to impose additional structu
 
  - Multicolinearity must be controlled while preserving model flexibility;
  - The predicted values feed into downstream decision-making (e.g. as weights or allocations), where overly concentrated contributions are undesirable.
- 
+
 We define the contribution of covariates $i$ as the absolute value of the product $\beta_iZ_i$, where $Z_i$ is a data matrix used to evaluate feature contributions, and seek to penalize contributions that exceed a specific upper bound $L_i$. This leads to either a hard-constrained formulation:
 $$\arg\min_{\beta}||Y-X\beta||_2^2+\lambda\Big(\alpha||\beta||_1+(1-\alpha)||\beta||_2^2\Big)\quad\text{s.t.}\quad \beta_iZ_i\leq L\quad\forall i$$
 or a soft-constrained formulation, where the violation of contribution caps is penalized:
@@ -42,7 +42,7 @@ The inclusion of the contribution cap penalty renders off-the-shelf solvers like
 
  - **BFGS or L-BFGS**: While our objective includes non-smooth terms (due to both the $\mathcal{l}_1$ and the cap penalty), quasi-Newton methods often perform well in practice for moderately-sized problems.
  - **OWL-QN (Orthant-Wise Limited-memory Quasi-Newton)**: Specifically designed for problems with an $\mathcal{l}_1$ term, OWL-QN preserves the convergence efficiency of L-BFGS while accounting for the subgradient structure of the $\mathcal{l}_1$ norm.
- 
+
 To align with `glmnet` conventions, we rewrite the loss in a normalized form as
 $$\min_{\beta_0,\beta}\frac{1}{2N}\sum_{i=1}^N\Big(y_i-(\beta_0+x_i^T\beta)\Big)^2+\lambda\bigg[\frac{(1-\alpha)}{2}||\beta||_2^2+\alpha||\beta||_1\bigg]+\gamma\sum_{i=1}^k\max\big(0,|\beta_iZ_i|-L\big)^2$$
 
@@ -64,8 +64,10 @@ We then call `capnet.cv` to find the best $\alpha$ and $\lambda$ values through 
 capnet.cv1 <- cv_capnet(X, y, 0, L, standardize = FALSE)
 alpha1 <- capnet.cv1$best_alpha
 lambda1 <- capnet.cv1$best_lambda
-capnet.mod1 <- capnet(X, y, alpha = alpha1, lambda = lambda1,
-                 gamma = 0, L = L, standardize = FALSE)
+capnet.mod1 <- capnet(X, y,
+  alpha = alpha1, lambda = lambda1,
+  gamma = 0, L = L, standardize = FALSE
+)
 ```
 
 ```{r results='asis', echo=FALSE}
@@ -76,8 +78,10 @@ cat(sprintf("Best alpha value: %.3f | Best lambda value %.4f", alpha1, lambda1))
 capnet.cv2 <- cv_capnet(X, y, 1, L, standardize = FALSE)
 alpha2 <- capnet.cv2$best_alpha
 lambda2 <- capnet.cv2$best_lambda
-capnet.mod2 <- capnet(X, y, alpha = alpha2, lambda = lambda2,
-                 gamma = 0.5, L = L, standardize = FALSE)
+capnet.mod2 <- capnet(X, y,
+  alpha = alpha2, lambda = lambda2,
+  gamma = 0.5, L = L, standardize = FALSE
+)
 ```
 
 ```{r results='asis', echo=FALSE}
@@ -96,7 +100,10 @@ print(system.time(cv_capnet(X, y, gamma = 0, L = L, standardize = FALSE)))
 print("System runtime for constrained 5-fold cross-validation")
 print(system.time(cv_capnet(X, y, gamma = 1, L = L, standardize = FALSE)))
 print("System runtime for constrained model fit")
-print(system.time(capnet(X, y, alpha = 0.5, lambda = 0.1, gamma = 10, L = L, standardize = FALSE)))
+print(system.time(capnet(X, y,
+        alpha = 0.5, lambda = 0.1, gamma = 10, L = L,
+        standardize = FALSE
+      )))
 ```
 
 ### Additional Parameters
@@ -123,7 +130,7 @@ Because `capnet` relies on the `lbfgs` package for optimization, convergence fai
 ### Social Science
  - **Fairness**:  Contribution caps can enforce fairness by directly limiting the effective contribution of sensitive or potentially biased features (e.g., race, gender, income proxies) in predictive models, thereby reducing disparate impact and increasing ethical compliance.
  - **Interpretability**: They facilitate explanation of model decisions by ensuring that influence is more evenly distributed across covariates. This improves stakeholder understanding and trust, especially in policy analysis or public-facing models.
- 
+
 ### Machine Learning and Statistical Modeling
  - **Robustness to Outliers**: By limiting the effective contribution (i.e., coefficient times covariate value), contribution caps reduce the influence of extreme covariate values that may destabilize model training and predictions. This is particularly valuable in datasets with fat-tailed distributions or measurement errors.
  - **Regularization Alternatives**: Unlike traditional L1 (lasso) or L2 (ridge) penalties that penalize coefficient magnitudes, contribution caps directly constrain the realized contribution of covariates to predictions. This yields a different form of regularization, controlling the output impact rather than parameter size, potentially leading to better generalization when variable scales differ greatly or when model stability is paramount.

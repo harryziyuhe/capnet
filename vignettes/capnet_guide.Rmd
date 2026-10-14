@@ -68,6 +68,8 @@ y <- example$y
 n <- nrow(X)
 p <- ncol(X)
 L <- example$L
+guide_lambda <- exp(seq(1, -5, length.out = 25))
+guide_alpha <- seq(0, 1, length.out = 5)
 maxx <- t(as.matrix(apply(X, 2, function(x) {
   mx <- max(x)
   mn <- min(x)
@@ -84,11 +86,16 @@ Use `cv_capnet` to search over $\alpha$ and $\lambda$ via K-fold cross-validatio
 
 ```{r no-penalty}
 set.seed(1)
-capnet.cv1 <- cv_capnet(X, y, 0, L, standardize = FALSE)
+capnet.cv1 <- cv_capnet(
+  X, y, 0, L, lambda = guide_lambda, alpha = guide_alpha,
+  standardize = FALSE
+)
 alpha1 <- capnet.cv1$best_alpha
 lambda1 <- capnet.cv1$best_lambda
-capnet.mod1 <- capnet(X, y, alpha = alpha1, lambda = lambda1,
-                 gamma = 0, L = L, standardize = FALSE)
+capnet.mod1 <- capnet(X, y,
+  alpha = alpha1, lambda = lambda1,
+  gamma = 0, L = L, standardize = FALSE
+)
 ```
 
 ```{r results='asis', echo=FALSE}
@@ -99,11 +106,16 @@ Adding a contribution cap penalty ($\gamma > 0$) may shift the selected $\lambda
 
 ```{r penalty}
 set.seed(2)
-capnet.cv2 <- cv_capnet(X, y, 1, L, standardize = FALSE)
+capnet.cv2 <- cv_capnet(
+  X, y, 1, L, lambda = guide_lambda, alpha = guide_alpha,
+  standardize = FALSE
+)
 alpha2 <- capnet.cv2$best_alpha
 lambda2 <- capnet.cv2$best_lambda
-capnet.mod2 <- capnet(X, y, alpha = alpha2, lambda = lambda2,
-                 gamma = 0.5, L = L, standardize = FALSE)
+capnet.mod2 <- capnet(X, y,
+  alpha = alpha2, lambda = lambda2,
+  gamma = 0.5, L = L, standardize = FALSE
+)
 ```
 
 ```{r results='asis', echo=FALSE}
@@ -126,11 +138,20 @@ plots$contribution
 
 ```{r runtime, echo=FALSE}
 print("System runtime for unconstrained 5-fold cross-validation")
-print(system.time(cv_capnet(X, y, gamma = 0, L = L, standardize = FALSE)))
+print(system.time(cv_capnet(
+  X, y, gamma = 0, L = L, lambda = guide_lambda,
+  alpha = guide_alpha, standardize = FALSE
+)))
 print("System runtime for constrained 5-fold cross-validation")
-print(system.time(cv_capnet(X, y, gamma = 1, L = L, standardize = FALSE)))
+print(system.time(cv_capnet(
+  X, y, gamma = 1, L = L, lambda = guide_lambda,
+  alpha = guide_alpha, standardize = FALSE
+)))
 print("System runtime for constrained model fit")
-print(system.time(capnet(X, y, alpha = 0.5, lambda = 0.1, gamma = 10, L = L, standardize = FALSE)))
+print(system.time(capnet(X, y,
+        alpha = 0.5, lambda = 0.1, gamma = 10, L = L,
+        standardize = FALSE
+      )))
 ```
 
 ---
@@ -164,57 +185,77 @@ The contribution cap optimizer introduces a new hyperparameter $\gamma$ in addit
 ```{r experiment, results="asis"}
 for (i in seq(-5, 10)) {
   # Regular model
-  model1 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
-                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  model1 <- capnet(X, y,
+    alpha = 0.5, lambda = 0.01,
+    gamma = 10**i, L = L, z = X, standardize = TRUE, multiplier = 1
+  )
   convergence1 <- model1$convergence
 
   # Larger lambda model
-  model2 <- capnet(X, y, alpha = 0.5, lambda = 0.5,
-                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  model2 <- capnet(X, y,
+    alpha = 0.5, lambda = 0.5,
+    gamma = 10**i, L = L, z = X, standardize = TRUE, multiplier = 1
+  )
   convergence2 <- model2$convergence
 
   # No elastic net penalty model
-  model3 <- capnet(X, y, alpha = 0.5, lambda = 0,
-                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  model3 <- capnet(X, y,
+    alpha = 0.5, lambda = 0,
+    gamma = 10**i, L = L, z = X, standardize = TRUE, multiplier = 1
+  )
   convergence3 <- model3$convergence
 
   # Ridge regression model
-  model4 <- capnet(X, y, alpha = 0, lambda = 0.01,
-                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  model4 <- capnet(X, y,
+    alpha = 0, lambda = 0.01,
+    gamma = 10**i, L = L, z = X, standardize = TRUE, multiplier = 1
+  )
   convergence4 <- model4$convergence
 
   # LASSO regression model
-  model5 <- capnet(X, y, alpha = 1, lambda = 0.01,
-                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 1)
+  model5 <- capnet(X, y,
+    alpha = 1, lambda = 0.01,
+    gamma = 10**i, L = L, z = X, standardize = TRUE, multiplier = 1
+  )
   convergence5 <- model5$convergence
 
   # Large multiplier model
-  model6 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
-                 gamma = 10 ** i, L = L, z = X, standardize = TRUE, multiplier = 100)
+  model6 <- capnet(X, y,
+    alpha = 0.5, lambda = 0.01,
+    gamma = 10**i, L = L, z = X, standardize = TRUE, multiplier = 100
+  )
   convergence6 <- model6$convergence
 
   # Small L model
-  model7 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
-                 gamma = 10 ** i, L = L/2, z = X, standardize = TRUE, multiplier = 1)
+  model7 <- capnet(X, y,
+    alpha = 0.5, lambda = 0.01,
+    gamma = 10**i, L = L / 2, z = X, standardize = TRUE, multiplier = 1
+  )
   convergence7 <- model7$convergence
 
   # Single max-row model
-  model8 <- capnet(X, y, alpha = 0.5, lambda = 0.01,
-                 gamma = 10 ** i, L = L, z = maxx, standardize = TRUE, multiplier = 1)
+  model8 <- capnet(X, y,
+    alpha = 0.5, lambda = 0.01,
+    gamma = 10**i, L = L, z = maxx, standardize = TRUE, multiplier = 1
+  )
   convergence8 <- model8$convergence
 
-  convergence.table <- rbind(convergence.table,
-                             c(convergence1, convergence2,
-                               convergence3, convergence4,
-                               convergence5, convergence6,
-                               convergence7, convergence8))
+  convergence.table <- rbind(
+    convergence.table,
+    c(
+      convergence1, convergence2,
+      convergence3, convergence4,
+      convergence5, convergence6,
+      convergence7, convergence8
+    )
+  )
 }
 ```
 
 ```{r table, results='asis', echo=FALSE, message=FALSE, warning=FALSE}
 convergence.table <- as.data.frame(convergence.table)
 convergence.table[] <- lapply(convergence.table, as.character)
-convergence.table <- cbind(10 ** seq(-5, 10), convergence.table)
+convergence.table <- cbind(10**seq(-5, 10), convergence.table)
 colnames(convergence.table) <- c(
   "Gamma",
   "Base",
@@ -261,59 +302,73 @@ where $e_{ij} = \max(0,\,|x_{ij}\hat\beta_j| - L_j)$ is the per-observation cap 
 
 ### Cross-Validation Instability
 
-The elastic net regularization and contribution cap constraints are correlated with each other despite serving different roles: both shrink coefficients and reduce realized contributions. This interaction can destabilize cross-validation. The following experiment runs 50 independent CV rounds at three $\gamma$ values to illustrate the effect. Each run uses the maximum-magnitude row of $X$ as the evaluation matrix, ensuring cap violations are activated across all folds.
+The elastic net regularization and contribution cap constraints are correlated with each other despite serving different roles: both shrink coefficients and reduce realized contributions. This interaction can destabilize cross-validation. The following experiment runs 10 independent CV rounds at three $\gamma$ values to illustrate the effect. Each run uses five folds and six $\lambda$ values, with the maximum-magnitude row of $X$ as the evaluation matrix so cap violations are activated across folds.
 
 ```{r lambda-values}
-K          <- 10L
-n_runs     <- 50L
+K <- 5L
+n_runs <- 10L
 lambda_grid <- 10^seq(-11, -1, length.out = 6)
 
 run_one <- function(i) {
   set.seed(i)
-  cv0 <- cv_capnet(X, y, gamma = 0, L = L,
-                   alpha = 0.5, lambda = lambda_grid,
-                   z = maxx, K = K, standardize = TRUE, multiplier = 1)
-  cv01 <- cv_capnet(X, y, gamma = 0.1, L = L,
-                    alpha = 0.5, lambda = lambda_grid,
-                    z = maxx, K = K, standardize = TRUE, multiplier = 1)
-  cv100 <- cv_capnet(X, y, gamma = 100, L = L,
-                      alpha = 0.5, lambda = lambda_grid,
-                      z = maxx, K = K, standardize = TRUE, multiplier = 1)
+  cv0 <- cv_capnet(X, y,
+    gamma = 0, L = L,
+    alpha = 0.5, lambda = lambda_grid,
+    z = maxx, K = K, standardize = TRUE, multiplier = 1
+  )
+  cv01 <- cv_capnet(X, y,
+    gamma = 0.1, L = L,
+    alpha = 0.5, lambda = lambda_grid,
+    z = maxx, K = K, standardize = TRUE, multiplier = 1
+  )
+  cv100 <- cv_capnet(X, y,
+    gamma = 100, L = L,
+    alpha = 0.5, lambda = lambda_grid,
+    z = maxx, K = K, standardize = TRUE, multiplier = 1
+  )
 
-  fit0 <- capnet(X, y, alpha = 0.5, lambda = cv0$best_lambda,
-                 gamma = 0, L = L, z = maxx, standardize = TRUE, multiplier = 1)
-  fit01 <- capnet(X, y, alpha = 0.5, lambda = cv01$best_lambda,
-                  gamma = 0.1, L = L, z = maxx, standardize = TRUE, multiplier = 1)
-  fit100 <- capnet(X, y, alpha = 0.5, lambda = cv100$best_lambda,
-                    gamma = 100, L = L, z = maxx, standardize = TRUE, multiplier = 1)
+  fit0 <- capnet(X, y,
+    alpha = 0.5, lambda = cv0$best_lambda,
+    gamma = 0, L = L, z = maxx, standardize = TRUE, multiplier = 1
+  )
+  fit01 <- capnet(X, y,
+    alpha = 0.5, lambda = cv01$best_lambda,
+    gamma = 0.1, L = L, z = maxx, standardize = TRUE, multiplier = 1
+  )
+  fit100 <- capnet(X, y,
+    alpha = 0.5, lambda = cv100$best_lambda,
+    gamma = 100, L = L, z = maxx, standardize = TRUE, multiplier = 1
+  )
 
   list(
-    lambda0    = cv0$best_lambda,    beta0    = as.numeric(fit0$beta),
-    lambda01   = cv01$best_lambda,   beta01   = as.numeric(fit01$beta),
+    lambda0 = cv0$best_lambda, beta0 = as.numeric(fit0$beta),
+    lambda01 = cv01$best_lambda, beta01 = as.numeric(fit01$beta),
     lambda100 = cv100$best_lambda, beta100 = as.numeric(fit100$beta)
   )
 }
 
 results <- lapply(seq_len(n_runs), run_one)
 
-lambdas0    <- sapply(results, `[[`, "lambda0")
-lambdas01   <- sapply(results, `[[`, "lambda01")
-lambdas100  <- sapply(results, `[[`, "lambda100")
+lambdas0 <- sapply(results, `[[`, "lambda0")
+lambdas01 <- sapply(results, `[[`, "lambda01")
+lambdas100 <- sapply(results, `[[`, "lambda100")
 
-betas0    <- do.call(rbind, lapply(results, `[[`, "beta0"))
-betas01   <- do.call(rbind, lapply(results, `[[`, "beta01"))
-betas100  <- do.call(rbind, lapply(results, `[[`, "beta100"))
+betas0 <- do.call(rbind, lapply(results, `[[`, "beta0"))
+betas01 <- do.call(rbind, lapply(results, `[[`, "beta01"))
+betas100 <- do.call(rbind, lapply(results, `[[`, "beta100"))
 ```
 
 ```{r plot-lambda, echo=FALSE, fig.width=9, fig.height=5, out.width='100%'}
-best_lambdas <- as.data.frame(rbind(cbind(lambdas0, 0),
-                              cbind(lambdas01, 0.1),
-                              cbind(lambdas100, 100)))
+best_lambdas <- as.data.frame(rbind(
+  cbind(lambdas0, 0),
+  cbind(lambdas01, 0.1),
+  cbind(lambdas100, 100)
+))
 names(best_lambdas) <- c("lambda", "gamma")
 
 ggplot(best_lambdas) +
   geom_density(aes(x = lambda, color = as.factor(gamma))) +
-  scale_x_continuous(trans='log10') +
+  scale_x_continuous(trans = "log10") +
   labs(x = "Lambda", y = "Density", color = "gamma") +
   theme_minimal()
 ```
@@ -336,12 +391,13 @@ Although different CV rounds may select very different $\lambda$ values when cap
 }
 
 beta_df <- rbind(
-  .beta_summary(betas0,    "gamma = 0"),
-  .beta_summary(betas01,   "gamma = 0.1"),
-  .beta_summary(betas100,  "gamma = 100")
+  .beta_summary(betas0, "gamma = 0"),
+  .beta_summary(betas01, "gamma = 0.1"),
+  .beta_summary(betas100, "gamma = 100")
 )
 beta_df$gamma <- factor(beta_df$gamma,
-                        levels = c("gamma = 0", "gamma = 0.1", "gamma = 100"))
+  levels = c("gamma = 0", "gamma = 0.1", "gamma = 100")
+)
 
 ggplot(beta_df, aes(x = feature, y = mean, color = gamma, fill = gamma)) +
   geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, color = NA) +
@@ -387,13 +443,21 @@ simulate_simple_proxy <- function(
   stable_idx <- setdiff(seq_len(p), unstable_idx)
   Eta <- matrix(rnorm(n * p, sd = sigma_low), n, p)
   if (length(unstable_idx) > 0) {
-    flips <- matrix(rbinom(n * length(unstable_idx), 1, high_prob), n, length(unstable_idx))
+    flips <- matrix(
+      rbinom(n * length(unstable_idx), 1, high_prob), n,
+      length(unstable_idx)
+    )
     sd_mat <- sigma_low + flips * (sigma_high - sigma_low)
-    Eta[, unstable_idx] <- matrix(rnorm(n * length(unstable_idx)), n, length(unstable_idx)) * sd_mat
+    Eta[, unstable_idx] <- matrix(
+      rnorm(n * length(unstable_idx)), n,
+      length(unstable_idx)
+    ) * sd_mat
   }
   X <- mean_part + Eta
-  list(X = X, y = y, Z = Z, beta = beta, a = a,
-       unstable_idx = unstable_idx, stable_idx = stable_idx)
+  list(
+    X = X, y = y, Z = Z, beta = beta, a = a,
+    unstable_idx = unstable_idx, stable_idx = stable_idx
+  )
 }
 
 prepare_data <- function(data_source = c("quickstart", "proxy")) {
@@ -405,7 +469,8 @@ prepare_data <- function(data_source = c("quickstart", "proxy")) {
   } else {
     sim <- simulate_simple_proxy(
       n = 1200, p = 8, unstable_frac = 0.10,
-      sigma_low = 1.0, sigma_high = 8.0, high_prob = 0.10, seed = 2025)
+      sigma_low = 1.0, sigma_high = 8.0, high_prob = 0.10, seed = 2025
+    )
     X <- sim$X
     y <- sim$y
   }
@@ -427,7 +492,10 @@ prepare_data <- function(data_source = c("quickstart", "proxy")) {
     kappa <- 0.1
     L <- kappa * apply(abs(train_X), 2, function(v) stats::quantile(v, 0.99))
   }
-  list(train_X = train_X, train_y = train_y, test_X = test_X, test_y = test_y, L = L, gamma = gamma)
+  list(
+    train_X = train_X, train_y = train_y, test_X = test_X,
+    test_y = test_y, L = L, gamma = gamma
+  )
 }
 
 fit_models <- function(train_X, train_y, test_X, L, gamma) {
@@ -439,14 +507,17 @@ fit_models <- function(train_X, train_y, test_X, L, gamma) {
     enet.cv <- cv.glmnet(train_X, train_y, alpha = alpha)
     lambda_enet <- enet.cv$lambda.min
     enet.x <- glmnet(train_X, train_y, alpha = alpha, lambda = lambda_enet)
-    loss <- sum(predict(enet.x, train_X) - train_y) ^ 2
+    loss <- sum(predict(enet.x, train_X) - train_y)^2
     if (loss < best_loss) {
       best_alpha <- alpha
       best_lambda <- lambda_enet
       best_loss <- loss
     }
   }
-  best_enet <- glmnet(train_X, train_y, alpha = best_alpha, lambda = best_lambda)
+  best_enet <- glmnet(train_X, train_y,
+    alpha = best_alpha,
+    lambda = best_lambda
+  )
   enet_beta0 <- coef(best_enet)[1]
   enet_beta <- coef(best_enet)[-1]
   original_pred_mean <- sum(enet_beta * colMeans(train_X))
@@ -457,10 +528,14 @@ fit_models <- function(train_X, train_y, test_X, L, gamma) {
   }
   new_pred_mean <- sum(enet_beta * colMeans(train_X))
   enet_beta0 <- enet_beta0 + (original_pred_mean - new_pred_mean)
-  cap1 <- capnet(train_X, train_y, L, lambda = best_lambda, alpha = best_alpha,
-                 gamma = gamma, standardize = FALSE)
-  cap2 <- walk_capnet(train_X, train_y, L, test_X, lambda = best_lambda, alpha = best_alpha,
-                      gamma = gamma, standardize = FALSE)
+  cap1 <- capnet(train_X, train_y, L,
+    lambda = best_lambda, alpha = best_alpha,
+    gamma = gamma, standardize = FALSE
+  )
+  cap2 <- walk_capnet(train_X, train_y, L, test_X,
+    lambda = best_lambda, alpha = best_alpha,
+    gamma = gamma, standardize = FALSE
+  )
   list(
     enet = list(beta0 = enet_beta0, beta = enet_beta),
     cap1 = list(beta0 = cap1$a0, beta = cap1$beta),
@@ -470,11 +545,11 @@ fit_models <- function(train_X, train_y, test_X, L, gamma) {
 
 mse_from_beta <- function(X, y, beta0, beta) {
   pred <- as.numeric(beta0 + X %*% beta)
-  mean((pred - as.numeric(y)) ^ 2)
+  mean((pred - as.numeric(y))^2)
 }
 
 mse_from_pred <- function(pred, y) {
-  mean((as.numeric(pred) - as.numeric(y)) ^ 2)
+  mean((as.numeric(pred) - as.numeric(y))^2)
 }
 ```
 
@@ -485,13 +560,28 @@ The first experiment uses the `QuickStartExample` data from `glmnet`. All featur
 ```{r quickstart}
 ds_qs <- prepare_data("quickstart")
 set.seed(123)
-fits_qs <- fit_models(ds_qs$train_X, ds_qs$train_y, ds_qs$test_X, ds_qs$L, ds_qs$gamma)
+fits_qs <- fit_models(
+  ds_qs$train_X, ds_qs$train_y, ds_qs$test_X, ds_qs$L,
+  ds_qs$gamma
+)
 
-qs_enet_is <- mse_from_beta(ds_qs$train_X, ds_qs$train_y, fits_qs$enet$beta0, fits_qs$enet$beta)
-qs_cap1_is <- mse_from_beta(ds_qs$train_X, ds_qs$train_y, fits_qs$cap1$beta0, fits_qs$cap1$beta)
+qs_enet_is <- mse_from_beta(
+  ds_qs$train_X, ds_qs$train_y, fits_qs$enet$beta0,
+  fits_qs$enet$beta
+)
+qs_cap1_is <- mse_from_beta(
+  ds_qs$train_X, ds_qs$train_y, fits_qs$cap1$beta0,
+  fits_qs$cap1$beta
+)
 
-qs_enet_oos <- mse_from_beta(ds_qs$test_X, ds_qs$test_y, fits_qs$enet$beta0, fits_qs$enet$beta)
-qs_cap1_oos <- mse_from_beta(ds_qs$test_X, ds_qs$test_y, fits_qs$cap1$beta0, fits_qs$cap1$beta)
+qs_enet_oos <- mse_from_beta(
+  ds_qs$test_X, ds_qs$test_y, fits_qs$enet$beta0,
+  fits_qs$enet$beta
+)
+qs_cap1_oos <- mse_from_beta(
+  ds_qs$test_X, ds_qs$test_y, fits_qs$cap1$beta0,
+  fits_qs$cap1$beta
+)
 qs_cap2_oos <- mse_from_pred(fits_qs$cap2$predictions, ds_qs$test_y)
 
 report_qs <- data.frame(
@@ -499,7 +589,7 @@ report_qs <- data.frame(
   IS = c(qs_enet_is, qs_cap1_is, NA),
   OOS = c(qs_enet_oos, qs_cap1_oos, qs_cap2_oos)
 )
-kable(report_qs, digits = 6)
+knitr::kable(report_qs, digits = 6)
 ```
 
 The in-sample (IS) and out-of-sample (OOS) MSEs show that the elastic net and optimized cap models perform comparably. The walk-forward model achieves slightly better OOS performance, attributable to its per-observation refitting---but at higher computational cost and without a single stable coefficient vector.
@@ -511,13 +601,28 @@ To illustrate the strength of `capnet`, the second experiment uses a synthetic l
 ```{r proxy}
 ds_px <- prepare_data("proxy")
 set.seed(123)
-fits_px <- fit_models(ds_px$train_X, ds_px$train_y, ds_px$test_X, ds_px$L, ds_px$gamma)
+fits_px <- fit_models(
+  ds_px$train_X, ds_px$train_y, ds_px$test_X, ds_px$L,
+  ds_px$gamma
+)
 
-px_enet_is <- mse_from_beta(ds_px$train_X, ds_px$train_y, fits_px$enet$beta0, fits_px$enet$beta)
-px_cap1_is <- mse_from_beta(ds_px$train_X, ds_px$train_y, fits_px$cap1$beta0, fits_px$cap1$beta)
+px_enet_is <- mse_from_beta(
+  ds_px$train_X, ds_px$train_y, fits_px$enet$beta0,
+  fits_px$enet$beta
+)
+px_cap1_is <- mse_from_beta(
+  ds_px$train_X, ds_px$train_y, fits_px$cap1$beta0,
+  fits_px$cap1$beta
+)
 
-px_enet_oos <- mse_from_beta(ds_px$test_X, ds_px$test_y, fits_px$enet$beta0, fits_px$enet$beta)
-px_cap1_oos <- mse_from_beta(ds_px$test_X, ds_px$test_y, fits_px$cap1$beta0, fits_px$cap1$beta)
+px_enet_oos <- mse_from_beta(
+  ds_px$test_X, ds_px$test_y, fits_px$enet$beta0,
+  fits_px$enet$beta
+)
+px_cap1_oos <- mse_from_beta(
+  ds_px$test_X, ds_px$test_y, fits_px$cap1$beta0,
+  fits_px$cap1$beta
+)
 px_cap2_oos <- mse_from_pred(fits_px$cap2$predictions, ds_px$test_y)
 
 report_px <- data.frame(
@@ -525,7 +630,7 @@ report_px <- data.frame(
   IS = c(px_enet_is, px_cap1_is, NA),
   OOS = c(px_enet_oos, px_cap1_oos, px_cap2_oos)
 )
-kable(report_px, digits = 6)
+knitr::kable(report_px, digits = 6)
 ```
 
 Both cap models outperform the elastic net baseline on OOS MSE. The walk-forward implementation achieves the greatest improvement because it refits on the most recent window before each prediction, adapting to any shift in the spike pattern seen out of sample.

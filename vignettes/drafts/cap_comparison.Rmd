@@ -27,15 +27,15 @@ library(capnet)
 ```{r, include=FALSE}
 simulate_simple_proxy <- function(
   n = 1200, p = 8,
-  sparsity = 0.5,          # zeros in beta (on Z -> Y)
-  z_sd = 1,                # scale of Z
-  eps_sd = 1,              # noise in Y
-  unstable_idx = NULL,     # which X columns have unstable variance
-  unstable_frac = 0.25,    # used only if unstable_idx is NULL
-  a_sd = 0.3,              # multiplicative scaling variation a_j
-  sigma_low = 1.0,         # base noise sd for X
-  sigma_high = 8.0,        # high noise sd for unstable features
-  high_prob = 0.10,        # P(sigma_high) per observation for unstable features
+  sparsity = 0.5, # zeros in beta (on Z -> Y)
+  z_sd = 1, # scale of Z
+  eps_sd = 1, # noise in Y
+  unstable_idx = NULL, # which X columns have unstable variance
+  unstable_frac = 0.25, # used only if unstable_idx is NULL
+  a_sd = 0.3, # multiplicative scaling variation a_j
+  sigma_low = 1.0, # base noise sd for X
+  sigma_high = 8.0, # high noise sd for unstable features
+  high_prob = 0.10, # P(sigma_high) per observation for unstable features
   seed = 2025
 ) {
   set.seed(seed)
@@ -49,7 +49,7 @@ simulate_simple_proxy <- function(
   y <- drop(Z %*% beta + rnorm(n, sd = eps_sd))
 
   # 3) Linear link from Z to X with per-feature scale a_j
-  a <- exp(rnorm(p, mean = 0, sd = a_sd))  # mild variation
+  a <- exp(rnorm(p, mean = 0, sd = a_sd)) # mild variation
   mean_part <- sweep(Z, 2, a, `*`)
 
   # 4) Decide which columns in X have unstable variance
@@ -60,24 +60,32 @@ simulate_simple_proxy <- function(
   stable_idx <- setdiff(seq_len(p), unstable_idx)
 
   # 5) Build noise matrix Eta
-  Eta <- matrix(rnorm(n * p, sd = sigma_low), n, p)  # start with stable noise
+  Eta <- matrix(rnorm(n * p, sd = sigma_low), n, p) # start with stable noise
   if (length(unstable_idx) > 0) {
     # For unstable cols, each row flips to high variance with prob = high_prob
-    flips <- matrix(rbinom(n * length(unstable_idx), 1, high_prob), n, length(unstable_idx))
+    flips <- matrix(
+      rbinom(n * length(unstable_idx), 1, high_prob), n,
+      length(unstable_idx)
+    )
     sd_mat <- sigma_low + flips * (sigma_high - sigma_low)
-    Eta[, unstable_idx] <- matrix(rnorm(n * length(unstable_idx)), n, length(unstable_idx)) * sd_mat
+    Eta[, unstable_idx] <- matrix(
+      rnorm(n * length(unstable_idx)), n,
+      length(unstable_idx)
+    ) * sd_mat
   }
 
   # 6) Observed proxies: X = a*Z + Eta
   X <- mean_part + Eta
 
-  list(X = X, y = y, Z = Z, beta = beta, a = a,
-       unstable_idx = unstable_idx, stable_idx = stable_idx)
+  list(
+    X = X, y = y, Z = Z, beta = beta, a = a,
+    unstable_idx = unstable_idx, stable_idx = stable_idx
+  )
 }
 ```
 
 ```{r include=FALSE}
-prepare_data <- function(data_source = c("quickstart","proxy")) {
+prepare_data <- function(data_source = c("quickstart", "proxy")) {
   data_source <- match.arg(data_source)
   if (data_source == "quickstart") {
     data(QuickStartExample, package = "glmnet")
@@ -86,7 +94,8 @@ prepare_data <- function(data_source = c("quickstart","proxy")) {
   } else {
     sim <- simulate_simple_proxy(
       n = 1200, p = 8, unstable_frac = 0.10,
-      sigma_low = 1.0, sigma_high = 8.0, high_prob = 0.10, seed = 2025)
+      sigma_low = 1.0, sigma_high = 8.0, high_prob = 0.10, seed = 2025
+    )
     X <- sim$X
     y <- sim$y
   }
@@ -95,14 +104,14 @@ prepare_data <- function(data_source = c("quickstart","proxy")) {
   shuffle <- sample(seq_len(nrow(X)))
   X <- X[shuffle, ]
   y <- y[shuffle, , drop = FALSE]
-  
+
   n <- nrow(X)
   split <- floor(n * 0.8)
   train_X <- X[1:split, ]
   train_y <- y[1:split, , drop = FALSE]
   test_X <- X[(split + 1):n, ]
   test_y <- y[(split + 1):n, , drop = FALSE]
-  
+
   gamma <- 100
   if (data_source == "quickstart") {
     L <- runif(ncol(X), 0.8, 1.2)
@@ -110,7 +119,10 @@ prepare_data <- function(data_source = c("quickstart","proxy")) {
     kappa <- 0.1
     L <- kappa * apply(abs(train_X), 2, function(v) stats::quantile(v, 0.99))
   }
-  list(train_X = train_X, train_y = train_y, test_X = test_X, test_y = test_y, L = L, gamma = gamma)
+  list(
+    train_X = train_X, train_y = train_y, test_X = test_X,
+    test_y = test_y, L = L, gamma = gamma
+  )
 }
 ```
 
@@ -120,33 +132,42 @@ fit_models <- function(train_X, train_y, test_X, L, gamma) {
   best_alpha <- 0
   best_lambda <- 0
   best_loss <- Inf
-  
+
   for (alpha in alphas) {
-    enet.cv <- cv.glmnet(train_X, train_y, alpha=alpha)
+    enet.cv <- cv.glmnet(train_X, train_y, alpha = alpha)
     lambda_enet <- enet.cv$lambda.min
-    enet.x <- glmnet(train_X, train_y, alpha=alpha, lambda=lambda_enet)
-    loss <- sum(predict(enet.x, train_X) - train_y) ^ 2
+    enet.x <- glmnet(train_X, train_y, alpha = alpha, lambda = lambda_enet)
+    loss <- sum(predict(enet.x, train_X) - train_y)^2
     if (loss < best_loss) {
       best_alpha <- alpha
       best_lambda <- lambda_enet
       best_loss <- loss
     }
   }
-  best_enet <- glmnet(train_X, train_y, alpha=best_alpha, lambda=best_lambda)
+  best_enet <- glmnet(train_X, train_y,
+    alpha = best_alpha,
+    lambda = best_lambda
+  )
   enet_beta0 <- coef(best_enet)[1]
   enet_beta <- coef(best_enet)[-1]
   original_pred_mean <- sum(enet_beta * colMeans(train_X))
   for (i in seq_along(enet_beta)) {
-    if (abs(enet_beta[i] * max(train_X[,i])) > L[i]) {
+    if (abs(enet_beta[i] * max(train_X[, i])) > L[i]) {
       enet_beta[i] <- (L[i] / max(train_X[, i])) * sign(enet_beta[i])
     }
   }
   new_pred_mean <- sum(enet_beta * colMeans(train_X))
   enet_beta0 <- enet_beta0 + (original_pred_mean - new_pred_mean)
-  
-  cap1 <- capnet(train_X, train_y, L, lambda = best_lambda, alpha = best_alpha, gamma = gamma, standardize=FALSE)
-  cap2 <- walk_capnet(train_X, train_y, L, test_X, lambda = best_lambda, alpha = best_alpha, gamma = gamma, standardize=FALSE)
-  
+
+  cap1 <- capnet(train_X, train_y, L,
+    lambda = best_lambda,
+    alpha = best_alpha, gamma = gamma, standardize = FALSE
+  )
+  cap2 <- walk_capnet(train_X, train_y, L, test_X,
+    lambda = best_lambda,
+    alpha = best_alpha, gamma = gamma, standardize = FALSE
+  )
+
   list(
     enet = list(beta0 = enet_beta0, beta = enet_beta),
     cap1 = list(beta0 = cap1$a0, beta = cap1$beta),
@@ -156,27 +177,42 @@ fit_models <- function(train_X, train_y, test_X, L, gamma) {
 
 mse_from_beta <- function(X, y, beta0, beta) {
   pred <- as.numeric(beta0 + X %*% beta)
-  mean((pred - as.numeric(y)) ^ 2)
+  mean((pred - as.numeric(y))^2)
 }
 
 mse_from_pred <- function(pred, y) {
-  mean((as.numeric(pred) - as.numeric(y)) ^ 2)
+  mean((as.numeric(pred) - as.numeric(y))^2)
 }
 ```
 
 ### Standard Well-Behaved Data
-The first example uses quick start example data from \texttt{glmnet}. Theoretically, we expect all models to perform similarly as all features are well-behaving and should rarely trigger large contribution penalties in the \texttt{capnet} model. 
+The first example uses quick start example data from \texttt{glmnet}. Theoretically, we expect all models to perform similarly as all features are well-behaving and should rarely trigger large contribution penalties in the \texttt{capnet} model.
 
 
 ```{r}
 ds_qs <- prepare_data("quickstart")
-fits_qs <- fit_models(ds_qs$train_X, ds_qs$train_y, ds_qs$test_X, ds_qs$L, ds_qs$gamma)
+fits_qs <- fit_models(
+  ds_qs$train_X, ds_qs$train_y, ds_qs$test_X, ds_qs$L,
+  ds_qs$gamma
+)
 
-qs_enet_is <- mse_from_beta(ds_qs$train_X, ds_qs$train_y, fits_qs$enet$beta0, fits_qs$enet$beta)
-qs_cap1_is <- mse_from_beta(ds_qs$train_X, ds_qs$train_y, fits_qs$cap1$beta0, fits_qs$cap1$beta)
+qs_enet_is <- mse_from_beta(
+  ds_qs$train_X, ds_qs$train_y, fits_qs$enet$beta0,
+  fits_qs$enet$beta
+)
+qs_cap1_is <- mse_from_beta(
+  ds_qs$train_X, ds_qs$train_y, fits_qs$cap1$beta0,
+  fits_qs$cap1$beta
+)
 
-qs_enet_oos <- mse_from_beta(ds_qs$test_X, ds_qs$test_y, fits_qs$enet$beta0, fits_qs$enet$beta)
-qs_cap1_oos <- mse_from_beta(ds_qs$test_X, ds_qs$test_y, fits_qs$cap1$beta0, fits_qs$cap1$beta)
+qs_enet_oos <- mse_from_beta(
+  ds_qs$test_X, ds_qs$test_y, fits_qs$enet$beta0,
+  fits_qs$enet$beta
+)
+qs_cap1_oos <- mse_from_beta(
+  ds_qs$test_X, ds_qs$test_y, fits_qs$cap1$beta0,
+  fits_qs$cap1$beta
+)
 qs_cap2_oos <- mse_from_pred(fits_qs$cap2$predictions, ds_qs$test_y)
 
 report_qs <- data.frame(
@@ -194,13 +230,28 @@ To illustrate the strength of the \texttt{capnet} model, I construct a synthetic
 
 ```{r}
 ds_px <- prepare_data("proxy")
-fits_px <- fit_models(ds_px$train_X, ds_px$train_y, ds_px$test_X, ds_px$L, ds_px$gamma)
+fits_px <- fit_models(
+  ds_px$train_X, ds_px$train_y, ds_px$test_X, ds_px$L,
+  ds_px$gamma
+)
 
-px_enet_is <- mse_from_beta(ds_px$train_X, ds_px$train_y, fits_px$enet$beta0, fits_px$enet$beta)
-px_cap1_is <- mse_from_beta(ds_px$train_X, ds_px$train_y, fits_px$cap1$beta0, fits_px$cap1$beta)
+px_enet_is <- mse_from_beta(
+  ds_px$train_X, ds_px$train_y, fits_px$enet$beta0,
+  fits_px$enet$beta
+)
+px_cap1_is <- mse_from_beta(
+  ds_px$train_X, ds_px$train_y, fits_px$cap1$beta0,
+  fits_px$cap1$beta
+)
 
-px_enet_oos <- mse_from_beta(ds_px$test_X, ds_px$test_y, fits_px$enet$beta0, fits_px$enet$beta)
-px_cap1_oos <- mse_from_beta(ds_px$test_X, ds_px$test_y, fits_px$cap1$beta0, fits_px$cap1$beta)
+px_enet_oos <- mse_from_beta(
+  ds_px$test_X, ds_px$test_y, fits_px$enet$beta0,
+  fits_px$enet$beta
+)
+px_cap1_oos <- mse_from_beta(
+  ds_px$test_X, ds_px$test_y, fits_px$cap1$beta0,
+  fits_px$cap1$beta
+)
 px_cap2_oos <- mse_from_pred(fits_px$cap2$predictions, ds_px$test_y)
 
 report_px <- data.frame(
@@ -210,7 +261,6 @@ report_px <- data.frame(
 )
 kable(report_px, digits = 6)
 ```
-
 
 
 

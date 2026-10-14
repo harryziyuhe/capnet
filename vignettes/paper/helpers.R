@@ -1,11 +1,11 @@
 calc_moments <- function(data, na.rm = TRUE) {
   # keep only numeric columns
   data <- data[, sapply(data, is.numeric), drop = FALSE]
-  
+
   res <- lapply(names(data), function(name) {
     x <- data[[name]]
     if (na.rm) x <- x[!is.na(x)]
-    
+
     n <- length(x)
     if (n < 4) {
       return(data.frame(
@@ -15,20 +15,20 @@ calc_moments <- function(data, na.rm = TRUE) {
         excess_kurtosis = NA_real_
       ))
     }
-    
+
     m <- mean(x)
     v <- var(x)
     s <- sd(x)
-    
+
     # bias-corrected excess kurtosis
     if (s == 0) {
       k <- NA_real_
     } else {
       z <- (x - m) / s
-      k <- (n*(n+1)/((n-1)*(n-2)*(n-3))) * sum(z^4) -
-        (3*(n-1)^2/((n-2)*(n-3)))
+      k <- (n * (n + 1) / ((n - 1) * (n - 2) * (n - 3))) *
+        sum(z^4) - (3 * (n - 1)^2 / ((n - 2) * (n - 3)))
     }
-    
+
     data.frame(
       variable = name,
       mean = m,
@@ -36,18 +36,18 @@ calc_moments <- function(data, na.rm = TRUE) {
       excess_kurtosis = k
     )
   })
-  
+
   dplyr::bind_rows(res)
 }
 
 moments_latex <- function(data, digits = 3) {
-  tab <- calc_moments(data) %>%
+  tab <- calc_moments(data) |>
     dplyr::mutate(
       dplyr::across(-variable, ~ round(., digits))
     )
-  
+
   xt <- xtable::xtable(tab)
-  
+
   print(
     xt,
     include.rownames = FALSE,
@@ -57,9 +57,9 @@ moments_latex <- function(data, digits = 3) {
 
 postcap_contrib <- function(object, newx, L) {
   beta <- as.numeric(object$beta)
-  
+
   contrib <- sweep(newx, 2, beta, `*`)
-  
+
   if (length(L) == 1L) {
     contrib_capped <- pmax(pmin(contrib, L), -L)
   } else {
@@ -69,7 +69,7 @@ postcap_contrib <- function(object, newx, L) {
     L_mat <- matrix(rep(L, each = nrow(newx)), nrow = nrow(newx))
     contrib_capped <- pmax(pmin(contrib, L_mat), -L_mat)
   }
-  
+
   contrib_capped
 }
 
@@ -83,14 +83,14 @@ make_contrib_tibble <- function(contrib,
                                 feature_cols) {
   contrib_df <- as.data.frame(contrib)
   names(contrib_df) <- feature_cols
-  
+
   tibble::tibble(
     !!date_col := test_use[[date_col]],
     refit_month = pred_month,
     method = method,
     gamma = gamma,
     lambda = lambda
-  ) %>%
+  ) |>
     dplyr::bind_cols(tibble::as_tibble(contrib_df))
 }
 
@@ -103,7 +103,11 @@ default_L_formula <- function(train_use, target_col, feature_cols, y_train) {
 .rolling_lapply <- function(X, FUN, parallel = FALSE, workers = NULL) {
   if (!isTRUE(parallel)) return(lapply(X, FUN))
 
-  workers <- if (is.null(workers)) max(1, parallel::detectCores() - 1) else workers
+  workers <- if (is.null(workers)) {
+    max(1, parallel::detectCores() - 1)
+  } else {
+    workers
+  }
   # R's connection table holds 128 slots; leave 10 free for stdin/stdout/stderr
   # and any other open connections. Never use more workers than tasks either.
   safe_max <- max(1L, 128L - length(getAllConnections()) - 10L)
@@ -141,7 +145,9 @@ rolling_enet <- function(df,
                          window_years = 20,
                          nfolds = 10,
                          standardize = TRUE,
-                         method = c("capnet_walk", "capnet", "glmnet", "postcap"),
+                         method = c(
+                           "capnet_walk", "capnet", "glmnet", "postcap"
+                         ),
                          capnet_gamma = c(0),
                          walk_gamma = c(0.1, 1, 10, 100),
                          min_obs = 100,
@@ -159,19 +165,40 @@ rolling_enet <- function(df,
   # closure below captures concrete values rather than unforced promises
   # pointing back at the caller's environment (which won't exist on a
   # PSOCK worker). Mirrors .capnet_force_env()'s purpose inside the package.
-  force(df); force(date_col); force(target_col); force(alpha); force(window_years)
-  force(nfolds); force(standardize); force(method); force(capnet_gamma); force(walk_gamma)
-  force(min_obs); force(eval_start); force(seed); force(family); force(cap_formula)
-  force(lambda_override); force(walk); force(walk_parallel); force(walk_workers)
-  force(parallel); force(workers)
+  force(df)
+  force(date_col)
+  force(target_col)
+  force(alpha)
+  force(window_years)
+  force(nfolds)
+  force(standardize)
+  force(method)
+  force(capnet_gamma)
+  force(walk_gamma)
+  force(min_obs)
+  force(eval_start)
+  force(seed)
+  force(family)
+  force(cap_formula)
+  force(lambda_override)
+  force(walk)
+  force(walk_parallel)
+  force(walk_workers)
+  force(parallel)
+  force(workers)
 
   fam_obj <- get(family, envir = asNamespace("stats"), inherits = FALSE)()
   if (!is.null(lambda_override) && "glmnet" %in% method) {
-    stop("lambda_override is not compatible with method = \"glmnet\" (no cv.glmnet fit is run).")
+    stop(paste0(
+      "lambda_override is not compatible with method = \"glmnet\" ",
+      "(no cv.glmnet fit is run)."
+    ))
   }
   if (isTRUE(parallel) && isTRUE(walk_parallel)) {
-    stop("Do not combine parallel = TRUE with walk_parallel = TRUE: this nests ",
-         "one PSOCK cluster inside another (one per refit month, each spinning ",
+    stop("Do not combine parallel = TRUE with walk_parallel = TRUE: ",
+         "this nests one PSOCK cluster inside another (one per refit ",
+         "month, each ",
+         "spinning ",
          "up its own walk-forward cluster) and will oversubscribe CPU cores. ",
          "Parallelize at one level only.")
   }
@@ -179,15 +206,17 @@ rolling_enet <- function(df,
 
   stopifnot(date_col %in% names(df), target_col %in% names(df))
 
-  df <- df %>%
+  df <- df |>
     dplyr::mutate(
       .date = as.Date(.data[[date_col]]),
       .refit_month = lubridate::floor_date(.date, "month")
-    ) %>%
-    dplyr::filter(!is.na(.date), !is.na(.data[[target_col]])) %>%
+    ) |>
+    dplyr::filter(!is.na(.date), !is.na(.data[[target_col]])) |>
     dplyr::arrange(.date)
 
-  feature_cols <- setdiff(names(df), c(date_col, target_col, ".date", ".refit_month"))
+  feature_cols <- setdiff(
+    names(df), c(date_col, target_col, ".date", ".refit_month")
+  )
   feature_cols <- feature_cols[sapply(df[feature_cols], is.numeric)]
 
   if (length(feature_cols) == 0) {
@@ -195,7 +224,9 @@ rolling_enet <- function(df,
   }
 
   refit_months <- sort(unique(df$.refit_month))
-  refit_months <- refit_months[refit_months >= lubridate::floor_date(eval_start, "month")]
+  refit_months <- refit_months[
+    refit_months >= lubridate::floor_date(eval_start, "month")
+  ]
 
   # Each refit month is fully independent given `df`/`feature_cols` (a rolling
   # re-slice of the same data), so run_month() can be dispatched via lapply()
@@ -207,17 +238,20 @@ rolling_enet <- function(df,
     pred_month <- refit_months[i]
     train_end <- pred_month - lubridate::days(1)
     train_start <- pred_month %m-% lubridate::years(window_years)
-    
-    train_use <- df %>% 
-      dplyr::filter(.date >= train_start, .date <= train_end) %>% 
-      dplyr::select(dplyr::all_of(c(target_col, feature_cols))) %>% 
+
+    train_use <- df |>
+      dplyr::filter(.date >= train_start, .date <= train_end) |>
+      dplyr::select(dplyr::all_of(c(target_col, feature_cols))) |>
       dplyr::filter(dplyr::if_all(dplyr::everything(), ~ !is.na(.)))
-    
-    test_use <- df %>% 
-      dplyr::filter(.refit_month == pred_month) %>% 
-      dplyr::select(dplyr::all_of(c(date_col, target_col, feature_cols)), .refit_month) %>%
+
+    test_use <- df |>
+      dplyr::filter(.refit_month == pred_month) |>
+      dplyr::select(
+        dplyr::all_of(c(date_col, target_col, feature_cols)),
+        .refit_month
+      ) |>
       dplyr::filter(dplyr::if_all(dplyr::all_of(feature_cols), ~ !is.na(.)))
-    
+
     if (nrow(train_use) < min_obs || nrow(test_use) == 0) {
       return(list(pred = NULL, contrib = NULL, lambda = NA_real_))
     }
@@ -246,13 +280,15 @@ rolling_enet <- function(df,
     month_preds <- list()
     month_contribs <- list()
     idx <- 1L
-    
+
     if ("glmnet" %in% method) {
-      preds <- as.numeric(stats::predict(cvfit, newx = x_test, s = lambda, type = "response"))
-      
+      preds <- as.numeric(
+        stats::predict(cvfit, newx = x_test, s = lambda, type = "response")
+      )
+
       beta <- as.numeric(glmnet::coef.glmnet(cvfit$glmnet.fit, s = lambda))[-1]
       contrib <- sweep(x_test, 2, beta, `*`)
-      
+
       month_preds[[idx]] <- tibble::tibble(
         !!date_col := test_use[[date_col]],
         refit_month = test_use$.refit_month,
@@ -262,7 +298,7 @@ rolling_enet <- function(df,
         actual = test_use[[target_col]],
         predicted = preds
       )
-      
+
       month_contribs[[idx]] <- make_contrib_tibble(
         contrib = contrib,
         test_use = test_use,
@@ -273,10 +309,10 @@ rolling_enet <- function(df,
         lambda = lambda,
         feature_cols = feature_cols
       )
-      
+
       idx <- idx + 1L
     }
-    
+
     if ("capnet" %in% method || "postcap" %in% method) {
       for (gamma_j in capnet_gamma) {
         fit_cap <- capnet::capnet(
@@ -291,12 +327,14 @@ rolling_enet <- function(df,
         )
 
         if ("capnet" %in% method) {
-          preds <- as.numeric(stats::predict(fit_cap, newdata = x_test, type = "response"))
+          preds <- as.numeric(
+            stats::predict(fit_cap, newdata = x_test, type = "response")
+          )
           label <- ifelse(gamma_j == 0, "Uncapped", "Capnet")
-          
+
           beta <- as.numeric(fit_cap$beta)
           contrib <- sweep(x_test, 2, beta, "*")
-          
+
           month_preds[[idx]] <- tibble::tibble(
             !!date_col := test_use[[date_col]],
             refit_month = pred_month,
@@ -306,7 +344,7 @@ rolling_enet <- function(df,
             actual = test_use[[target_col]],
             predicted = preds
           )
-          
+
           month_contribs[[idx]] <- make_contrib_tibble(
             contrib = contrib,
             test_use = test_use,
@@ -317,15 +355,15 @@ rolling_enet <- function(df,
             lambda = lambda,
             feature_cols = feature_cols
           )
-          
+
           idx <- idx + 1L
         }
-        
-        if ("postcap" %in% method & gamma_j == 0) {
+
+        if ("postcap" %in% method && gamma_j == 0) {
           a0 <- if (!is.null(fit_cap$a0)) as.numeric(fit_cap$a0) else 0
           contrib <- postcap_contrib(fit_cap, x_test, L)
           preds_postcap <- fam_obj$linkinv(a0 + rowSums(contrib))
-          
+
           month_preds[[idx]] <- tibble::tibble(
             !!date_col := test_use[[date_col]],
             refit_month = pred_month,
@@ -335,7 +373,7 @@ rolling_enet <- function(df,
             actual = test_use[[target_col]],
             predicted = preds_postcap
           )
-          
+
           month_contribs[[idx]] <- make_contrib_tibble(
             contrib = contrib,
             test_use = test_use,
@@ -346,12 +384,12 @@ rolling_enet <- function(df,
             lambda = lambda,
             feature_cols = feature_cols
           )
-          
+
           idx <- idx + 1L
         }
       }
-    } 
-    
+    }
+
     if ("capnet_walk" %in% method) {
       for (gamma_j in walk_gamma) {
         fit_walk <- capnet::walk_capnet(
@@ -367,7 +405,7 @@ rolling_enet <- function(df,
           parallel = walk_parallel,
           workers = walk_workers
         )
-        
+
         month_preds[[idx]] <- tibble::tibble(
           !!date_col := test_use[[date_col]],
           refit_month = pred_month,
@@ -377,9 +415,9 @@ rolling_enet <- function(df,
           actual = test_use[[target_col]],
           predicted = fit_walk$predictions
         )
-        
+
         contrib <- fit_walk$feature_contributions
-        
+
         month_contribs[[idx]] <- make_contrib_tibble(
           contrib = contrib,
           test_use = test_use,
@@ -390,7 +428,7 @@ rolling_enet <- function(df,
           lambda = lambda,
           feature_cols = feature_cols
         )
-        
+
         idx <- idx + 1L
       }
     }
@@ -415,27 +453,27 @@ rolling_enet <- function(df,
   contrib_list <- lapply(month_results, `[[`, "contrib")
   lambda_vec <- vapply(month_results, function(r) r$lambda, numeric(1))
 
-  predictions <- dplyr::bind_rows(pred_list) %>%
+  predictions <- dplyr::bind_rows(pred_list) |>
     dplyr::arrange(.data[[date_col]])
-  
-  contributions <- dplyr::bind_rows(contrib_list) %>%
+
+  contributions <- dplyr::bind_rows(contrib_list) |>
     dplyr::arrange(.data[[date_col]])
-  
-  metrics <- predictions %>% 
-    dplyr::group_by(method, gamma) %>% 
+
+  metrics <- predictions |>
+    dplyr::group_by(method, gamma) |>
     dplyr::summarise(
       rmse = sqrt(mean((actual - predicted)^2, na.rm = TRUE)),
       mae = mean(abs(actual - predicted), na.rm = TRUE),
       cor = stats::cor(actual, predicted, use = "complete.obs"),
       .groups = "drop"
     )
-  
+
   lambda_table <- tibble::tibble(
     refit_month = refit_months,
     lambda = lambda_vec
-  ) %>%
+  ) |>
     dplyr::filter(!is.na(lambda))
-  
+
   list(
     predictions = predictions,
     contributions = contributions,
@@ -455,16 +493,16 @@ calc_oos_r2 <- function(pred_df, date_col = "X") {
 
   # expanding historical mean benchmark
   pred_df$mean_benchmark <- c(NA, cummean(head(pred_df$actual, -1)))
-  
+
   pred_df <- pred_df |>
     dplyr::filter(!is.na(mean_benchmark))
-  
+
   sse_model <- sum((pred_df$actual - pred_df$predicted)^2)
   sse_bench <- sum((pred_df$actual - pred_df$mean_benchmark)^2)
-  
+
   r2_oos <- 1 - sse_model / sse_bench
-  
-  return(r2_oos)
+
+  r2_oos
 }
 
 rolling_oos_r2 <- function(pred_df, window = 20, date_col = "X") {
@@ -485,7 +523,9 @@ rolling_oos_r2 <- function(pred_df, window = 20, date_col = "X") {
 
   pred_df |>
     mutate(
-      r2_roll = 1 - rollapply(se_model, window, sum, fill = NA, align = "right") /
-        rollapply(se_bench, window, sum, fill = NA, align = "right")
+      r2_roll = 1 - zoo::rollapply(
+        se_model, window, sum, fill = NA, align = "right"
+      ) /
+        zoo::rollapply(se_bench, window, sum, fill = NA, align = "right")
     )
 }

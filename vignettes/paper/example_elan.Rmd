@@ -52,17 +52,19 @@ if (length(missing) == 0) {
 
 ```{r data, result="asis"}
 data <- read.csv(system.file("extdata", "data.csv", package = "capnet"))
-vars_to_keep <- c("X", "target", "S2", "E2", "E3", "P9", "S1", "S5", "I2", "P8", 
-                  "P10", "P12", "P13")
-data <- data |> 
+vars_to_keep <- c(
+  "X", "target", "S2", "E2", "E3", "P9", "S1", "S5", "I2", "P8",
+  "P10", "P12", "P13"
+)
+data <- data |>
   mutate(
-    `U1` = `I1`-`I2`,
+    `U1` = `I1` - `I2`,
     `U2` = `M11` / (`I2` + `I9` + `I7`) * 3
-  ) |> 
+  ) |>
   select(all_of(vars_to_keep))
 
 
-print(calc_moments(data[, c(-1,-2)]))
+print(calc_moments(data[, c(-1, -2)]))
 ```
 
 ```{r experiment}
@@ -80,25 +82,24 @@ predictions <- list()
 contributions <- list()
 methods <- c()
 gamma_vals <- c()
-combos <- results$predictions %>% 
-  dplyr::distinct(method, gamma) %>% 
+combos <- results$predictions |>
+  dplyr::distinct(method, gamma) |>
   dplyr::arrange(method, gamma)
 
 for (i in seq_len(nrow(combos))) {
   m <- combos$method[i]
   gamma_j <- combos$gamma[i]
-  
-  pred_tmp <- results$predictions %>% 
+
+  pred_tmp <- results$predictions |>
     dplyr::filter(method == m, gamma == gamma_j)
-  contrib_tmp <- results$contributions %>% 
+  contrib_tmp <- results$contributions |>
     dplyr::filter(method == m, gamma == gamma_j)
-  
+
   predictions[[i]] <- pred_tmp
   contributions[[i]] <- contrib_tmp
   methods[i] <- m
   gamma_vals[i] <- gamma_j
 }
-
 ```
 
 ```{r summary, echo = FALSE}
@@ -129,13 +130,12 @@ rolling_list <- lapply(selected_idx, function(i) {
   df
 })
 
-plot_df <- dplyr::bind_rows(rolling_list) %>% 
+plot_df <- dplyr::bind_rows(rolling_list) |>
   dplyr::mutate(X = as.Date(X))
 
 ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
   geom_line(linewidth = 0.8, alpha = 0.9) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
-
   scale_color_manual(values = c(
     "Uncapped" = "steelblue",
     "Post-Fit Cap" = "firebrick",
@@ -150,8 +150,7 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
       by   = "6 months"
     ),
     date_labels = "%Y-%m"
-  ) + 
-
+  ) +
   labs(
     x = "Date",
     y = expression(R^2),
@@ -160,15 +159,13 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
 
   # --- WHITE BACKGROUND ---
   theme_bw(base_size = 16) +
-
   theme(
     legend.position = "top",
     legend.title = element_text(face = "bold"),
     plot.title = element_text(face = "bold", size = 16),
     plot.subtitle = element_text(color = "gray40"),
-    
     panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(),   # cleaner time axis
+    panel.grid.major.x = element_blank(), # cleaner time axis
     axis.text.x = element_text(angle = 0)
   )
 ```
@@ -176,13 +173,13 @@ ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
 ```{r fig.height = 6.5, fig.width = 10, echo = FALSE}
 selected_idx <- c(1, 2, 3)
 ref <- contributions[[1]]
-max_col_idx <- max.col(abs(ref[,6:16]), ties.method = "first")
+max_col_idx <- max.col(abs(ref[, 6:16]), ties.method = "first")
 
 max_contributions <- lapply(selected_idx, function(i) {
   df <- contributions[[i]]
   mat <- as.matrix(df)
   max_col <- as.numeric(mat[cbind(seq_len(nrow(mat)), max_col_idx + 5)])
-  df <- df[,1:5]
+  df <- df[, 1:5]
   df$max_col <- max_col
   df$spec <- paste0(
     methods[i],
@@ -191,13 +188,12 @@ max_contributions <- lapply(selected_idx, function(i) {
   df
 })
 
-plot_df <- dplyr::bind_rows(max_contributions) %>% 
+plot_df <- dplyr::bind_rows(max_contributions) |>
   dplyr::mutate(X = as.Date(X))
 
 ggplot(plot_df, aes(x = X, y = max_col, color = spec, group = spec)) +
   geom_line(linewidth = 0.8, alpha = 0.8) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
-
   scale_color_manual(values = c(
     "Uncapped" = "steelblue",
     "Post-Fit Cap" = "firebrick",
@@ -212,8 +208,7 @@ ggplot(plot_df, aes(x = X, y = max_col, color = spec, group = spec)) +
       by   = "6 months"
     ),
     date_labels = "%Y-%m"
-  ) + 
-
+  ) +
   labs(
     x = "Date",
     y = "Maximum Contribution",
@@ -222,15 +217,13 @@ ggplot(plot_df, aes(x = X, y = max_col, color = spec, group = spec)) +
 
   # --- WHITE BACKGROUND ---
   theme_bw(base_size = 16) +
-
   theme(
     legend.position = "top",
     legend.title = element_text(face = "bold"),
     plot.title = element_text(face = "bold", size = 16),
     plot.subtitle = element_text(color = "gray40"),
-    
     panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(),   # cleaner time axis
+    panel.grid.major.x = element_blank(), # cleaner time axis
     axis.text.x = element_text(angle = 0)
   )
 ```
@@ -247,13 +240,12 @@ contribution_list <- lapply(selected_idx, function(i) {
   df
 })
 
-plot_df <- dplyr::bind_rows(contribution_list) %>% 
+plot_df <- dplyr::bind_rows(contribution_list) |>
   dplyr::mutate(X = as.Date(X))
 
 ggplot(plot_df, aes(x = X, y = `P13`, color = spec, group = spec)) +
   geom_line(linewidth = 0.8, alpha = 0.8) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
-
   scale_color_manual(values = c(
     "Uncapped" = "steelblue",
     "Post-Fit Cap" = "firebrick",
@@ -268,8 +260,7 @@ ggplot(plot_df, aes(x = X, y = `P13`, color = spec, group = spec)) +
       by   = "6 months"
     ),
     date_labels = "%Y-%m"
-  ) + 
-
+  ) +
   labs(
     x = "Date",
     y = "Contribution",
@@ -278,15 +269,13 @@ ggplot(plot_df, aes(x = X, y = `P13`, color = spec, group = spec)) +
 
   # --- WHITE BACKGROUND ---
   theme_bw(base_size = 16) +
-
   theme(
     legend.position = "top",
     legend.title = element_text(face = "bold"),
     plot.title = element_text(face = "bold", size = 16),
     plot.subtitle = element_text(color = "gray40"),
-    
     panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(),   # cleaner time axis
+    panel.grid.major.x = element_blank(), # cleaner time axis
     axis.text.x = element_text(angle = 0)
   )
 ```
@@ -297,16 +286,18 @@ ggplot(plot_df, aes(x = X, y = `P13`, color = spec, group = spec)) +
 
 ```{r, include = FALSE}
 make_feature_table <- function(df_list, target_x, df_names = NULL,
-                               feature_cols = c("S2", "E2", "E3", "P9", "S1",
-                                                "S5", "I2", "P8", "P10", "P12", "P13")) {
+                               feature_cols = c(
+                                 "S2", "E2", "E3", "P9", "S1",
+                                 "S5", "I2", "P8", "P10", "P12", "P13"
+                               )) {
   if (is.null(df_names)) {
     df_names <- paste0("df", seq_along(df_list))
   }
 
   long_list <- lapply(seq_along(df_list), function(i) {
-    df_list[[i]] %>%
-      dplyr::filter(X == target_x) %>%
-      dplyr::select(dplyr::all_of(feature_cols)) %>%
+    df_list[[i]] |>
+      dplyr::filter(.data$X == target_x) |>
+      dplyr::select(dplyr::all_of(feature_cols)) |>
       tidyr::pivot_longer(
         cols = dplyr::everything(),
         names_to = "feature",
@@ -314,14 +305,17 @@ make_feature_table <- function(df_list, target_x, df_names = NULL,
       )
   })
 
-  out <- Reduce(function(x, y) dplyr::left_join(x, y, by = "feature"), long_list)
+  out <- Reduce(
+    function(x, y) dplyr::left_join(x, y, by = "feature"),
+    long_list
+  )
   as.data.frame(out)
 }
 ```
 
 ```{r contrib_table, result="asis"}
 tab <- make_feature_table(
-  df_list = contributions[c(1,2,3)],
+  df_list = contributions[c(1, 2, 3)],
   target_x = "2023-05-24",
   df_names = c("Post-Fit Cap", "Uncapped", "Walk-forward Capnet")
 )
@@ -373,9 +367,11 @@ models <- rolling_enet(
 )
 end_capnet_walk <- Sys.time()
 time_capnet_walk <- difftime(end_capnet_walk, start_capnet_walk, units = "secs")
-sprintf("Backtest runtime for walk-forward capnet: %.2f seconds", time_capnet_walk)
+sprintf(
+  "Backtest runtime for walk-forward capnet: %.2f seconds",
+  time_capnet_walk
+)
 ```
-
 
 
 
