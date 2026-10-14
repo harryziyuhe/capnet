@@ -1,6 +1,6 @@
 # Reproducible capnet R package hexagon logo (concept 3.1)
 # Uses grid plus ragg for reliable PNG output. svglite is optional for SVG.
-# Run from the package root: Rscript create_capnet_logo.R
+# Run from the package root: Rscript tools/create_capnet_logo.R
 
 capnet_logo <- function(
   png_file = "man/figures/logo.png",
