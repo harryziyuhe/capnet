@@ -7,7 +7,7 @@
 A differentiable penalty on what each feature *actually does to a prediction* — not just the size of its coefficient. Ships with GLM support (Gaussian, binomial, Poisson, Gamma), cross-validation, walk-forward backtesting, and diagnostic plotting, fit end-to-end with a custom OWL-QN/L-BFGS objective built on the `lbfgs` package.
 
 ![R >= 4.1](https://img.shields.io/badge/R-%3E%3D4.1-blue)
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![License: GPL-2.0-or-later](https://img.shields.io/badge/License-GPL--2.0--or--later-green.svg)
 ![tests](https://img.shields.io/badge/tests-73%20passing-brightgreen)
 
 ---
@@ -149,10 +149,10 @@ out <- walk_capnet(d$X, d$y, L = d$L, z = d$X, walk = 1,
 
 ## Documentation
 
-- `vignette("capnet")` — contribution-cap formulation, optimization strategy, and cross-domain use cases
-- `vignette("cap_comparison")`, `vignette("compare_mu")` — capped vs. uncapped comparisons
-- `vignette("example_elan")`, `vignette("example_wiki")` — the worked case studies above (Gaussian market-timing, Poisson web-traffic)
-- [`manuscript/main.tex`](manuscript/main.tex) — full paper draft (JSS format)
+- `vignette("capnet_guide")` — contribution-cap formulation, optimization strategy, and examples
+
+Comparison and case-study vignette drafts, along with the paper manuscript,
+are available in the source repository but are not included in the CRAN package.
 
 ## Development
 
