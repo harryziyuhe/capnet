@@ -65,26 +65,29 @@ penalty. When \code{lambda = 0}, no elastic-net penalty is applied.}
 
 \item{alpha}{Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
 \code{alpha = 1} is LASSO (pure L1), \code{alpha = 0} is Ridge (pure L2).
-When \code{alpha > 0} and \code{lambda > 0}, OWL-QN is used; otherwise
-L-BFGS is used.}
+For fits without finite coefficient bounds, OWL-QN is used when
+\code{alpha > 0} and \code{lambda > 0}; otherwise L-BFGS is used. Fits
+with finite bounds use projected proximal gradient.}
 
 \item{gamma}{Nonnegative numeric scalar; strength of the contribution-cap
 penalty. When \code{gamma = 0}, no cap penalty is applied and the model
 reduces to standard elastic net.}
 
 \item{lower.limits}{Optional numeric scalar or length-\eqn{p} vector of lower
-bounds on coefficients. Initial parameter values must satisfy the bounds;
-the default zero initialization satisfies any symmetric bound.}
+bounds on coefficients. Initial parameter values must satisfy the bounds.
+The default zero initialization is valid when zero lies within every
+interval; otherwise supply a valid \code{par}.}
 
 \item{upper.limits}{Optional numeric scalar or length-\eqn{p} vector of upper
 bounds on coefficients. Initial parameter values must satisfy the bounds.}
 
-\item{tol}{Nonnegative numeric tolerance used for gradient masking when
-\code{lower.limits} or \code{upper.limits} are specified. Default
-\code{1e-8}.}
+\item{tol}{Nonnegative numeric convergence tolerance for fits with finite
+coefficient bounds. It is the relative step-size threshold for the
+projected proximal-gradient solver and has no effect on unbounded fits.
+Default \code{1e-8}.}
 
-\item{maxit}{Integer; maximum number of quasi-Newton iterations. Default
-\code{1e5}.}
+\item{maxit}{Integer; maximum number of optimizer iterations. Default
+\code{10000}.}
 
 \item{par}{Optional numeric vector of length \eqn{p+1} (intercept first,
 then slopes) with initial parameter values. If \code{NULL}, uses zero
@@ -102,7 +105,8 @@ An object of class \code{"capnet"} with components:
 \eqn{z_{ij}\hat\beta_j} evaluated on \code{z}.}
 \item{\code{z}}{The evaluation matrix used for cap enforcement.}
 \item{\code{convergence}}{Integer convergence code from the optimizer:
-\code{0} = successful convergence; \code{-1001} = rounding-error stop
+\code{0} = successful convergence; \code{-1} = the bounded optimizer
+reached \code{maxit}; \code{-1001} = rounding-error stop
 (benign near-convergence, common with highly collinear features);
 \code{-998} = line search failure (try reducing \code{gamma} or
 \code{lambda}); other negative values indicate optimizer errors.
@@ -121,18 +125,23 @@ always inspect this field after fitting.}
 \description{
 Fits a penalized linear model by maximum likelihood with an elastic net
 penalty
-and an additional penalty that caps per-feature contributions. The optimizer
-uses limited memory BFGS (L-BFGS) when there is no L1 component and
-Orthant-Wise Limited-Memory Quasi-Newton (OWL-QN) when L1 regularization is
-present.
+and an additional penalty that caps per-feature contributions. Unbounded
+fits use L-BFGS when the L1 penalty is inactive and Orthant-Wise
+Limited-Memory Quasi-Newton (OWL-QN) when it is active. Fits with finite
+coefficient bounds use projected proximal gradient, with soft-thresholding
+for L1 regularization.
 }
 \details{
-When \code{alpha > 0} and \code{lambda > 0}, OWL-QN is used to handle the
-L1 component; otherwise L-BFGS is used. Box constraints are enforced via
-gradient masking with tolerance \code{tol}. If \code{standardize = TRUE},
-the model is fit on standardized \code{X} and coefficients are mapped back
-to the original scale on return; the cap penalty is always computed on the
-original scale.
+Fits without finite coefficient bounds use OWL-QN to handle the L1
+component when \code{alpha > 0} and \code{lambda > 0}, and L-BFGS otherwise.
+If any coefficient bound is finite, a projected proximal-gradient solver is
+used instead. Its proximal step applies soft-thresholding for the L1 term
+and then projects coefficients onto their allowed intervals. This permits
+coefficients to reach zero and change sign when the bounds allow it.
+\code{tol} controls the relative step-size convergence criterion for this
+bounded solver. If \code{standardize = TRUE}, the model is fit on
+standardized \code{X} and coefficients are mapped back to the original
+scale on return; the cap penalty is always computed on the original scale.
 
 \strong{Soft constraints}: the contribution cap is a \emph{penalty}, not a
 hard constraint. The returned \code{feature_contributions} may still exceed
