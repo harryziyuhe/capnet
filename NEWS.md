@@ -1,3 +1,9 @@
+# capnet 0.4.0
+* Reworked fitting with finite coefficient bounds to use projected proximal
+  gradient, enforcing the bounds throughout optimization and supporting the L1
+  penalty with soft-thresholding.
+* Expanded tests and documentation for bounded fitting and optimizer behavior.
+
 # capnet 0.3.3
 * Update function documentations
 * Fix parallel processing bug when running on machines with more than 128 cores
