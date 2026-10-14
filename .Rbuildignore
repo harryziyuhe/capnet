@@ -2,6 +2,7 @@
 ^\.github$
 ^dev$
 ^data-raw$
+^tools/create_capnet_logo\.R$
 ^\.Rproj\.user$
 ^\.Rhistory$
 ^\.Rproj$
