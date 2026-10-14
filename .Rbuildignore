@@ -11,7 +11,6 @@
 ^vignettes/\.Rhistory$
 ^LICENSE\.md$
 ^manuscript$
-^UPDATE_LOG\.md$
 ^\.claude$
 ^CLAUDE\.md$
 ^\.latexmkrc$
