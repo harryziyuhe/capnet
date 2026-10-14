@@ -86,13 +86,6 @@
 
     gradient_rest <- gradient_rest + gradient_cap
 
-    gradient_rest[
-      beta_rest <= train$lower.limits + train$tol & gradient_rest > 0
-    ] <- 0
-    gradient_rest[
-      beta_rest >= train$upper.limits - train$tol & gradient_rest < 0
-    ] <- 0
-
     c(gradient_0, gradient_rest)
   }
 
@@ -102,6 +95,11 @@
 # Engine for fitting capnet models
 .capnet_fit <- function(train, cap, params, verbose = 0) {
   obj <- .capnet_objective(train, cap, params)
+
+  if (any(is.finite(train$lower.limits)) ||
+      any(is.finite(train$upper.limits))) {
+    return(.capnet_fit_box(train, obj, params))
+  }
 
   fit <- lbfgs(obj$loss, obj$gradient, train$par,
     orthantwise_c = params$lambda * params$alpha,
@@ -116,5 +114,82 @@
     convergence = fit$convergence,
     message = fit$message,
     value = fit$value
+  )
+}
+
+# L-BFGS/OWL-QN has no box-bound support. Use a projected proximal-gradient
+# solve when finite coefficient bounds are present so every iterate remains
+# feasible, including steps that would otherwise overshoot a bound.
+.capnet_fit_box <- function(train, obj, params) {
+  lower <- c(-Inf, train$lower.limits)
+  upper <- c(Inf, train$upper.limits)
+  x <- train$par
+
+  if (any(x < lower | x > upper)) {
+    stop("Initial parameter values must satisfy coefficient bounds.",
+      call. = FALSE
+    )
+  }
+
+  l1 <- params$lambda * params$alpha
+  smooth_value <- obj$loss
+  total_value <- function(beta) {
+    smooth_value(beta) + l1 * sum(abs(beta[-1]))
+  }
+  proximal <- function(value, step) {
+    out <- value
+    out[-1] <- sign(value[-1]) * pmax(abs(value[-1]) - l1 * step, 0)
+    pmax(lower, pmin(upper, out))
+  }
+
+  y <- x
+  momentum <- 1
+  lipschitz <- 1
+  value_x <- total_value(x)
+  converged <- FALSE
+
+  for (iteration in seq_len(train$maxit)) {
+    restarted <- FALSE
+    repeat {
+      grad <- obj$gradient(y)
+      value_y <- smooth_value(y)
+      trial <- proximal(y - grad / lipschitz, 1 / lipschitz)
+      delta <- trial - y
+      majorizer <- value_y + sum(grad * delta) +
+        lipschitz * sum(delta^2) / 2
+
+      if (smooth_value(trial) <= majorizer + 1e-12) break
+      lipschitz <- lipschitz * 2
+    }
+
+    value_trial <- total_value(trial)
+    if (!restarted && value_trial > value_x) {
+      y <- x
+      momentum <- 1
+      restarted <- TRUE
+      next
+    }
+
+    if (max(abs(trial - x)) <= 1e-8 * (1 + max(abs(x)))) {
+      x <- trial
+      value_x <- value_trial
+      converged <- TRUE
+      break
+    }
+
+    next_momentum <- (1 + sqrt(1 + 4 * momentum^2)) / 2
+    y <- trial + ((momentum - 1) / next_momentum) * (trial - x)
+    x <- trial
+    momentum <- next_momentum
+    value_x <- value_trial
+  }
+
+  list(
+    a0 = x[1],
+    beta = x[-1],
+    convergence = if (converged) 0L else -1L,
+    message = if (converged) "Projected optimization converged." else
+      "Projected optimization reached maxit.",
+    value = value_x
   )
 }
