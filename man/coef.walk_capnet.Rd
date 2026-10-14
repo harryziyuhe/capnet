@@ -28,13 +28,15 @@ Extract coefficient paths from a walk-forward \code{capnet} fit
 }
 \examples{
 set.seed(1)
-n <- 50; p <- 5; n_new <- 8
+n <- 50
+p <- 5
+n_new <- 8
 X <- matrix(rnorm(n * p), n, p)
 z <- matrix(rnorm(n_new * p), n_new, p)
 y <- as.numeric(X \%*\% c(1, -1, 0.5, 0, 0) + rnorm(n))
 fit <- walk_capnet(X, y, L = 1, z = z, lambda = 0.1, alpha = 0.5, gamma = 1)
-coef(fit)           # nrow(z) x (1 + p) path
-coef(fit, index = 1:3)  # first three steps only
+coef(fit) # nrow(z) x (1 + p) path
+coef(fit, index = 1:3) # first three steps only
 
 }
 \seealso{

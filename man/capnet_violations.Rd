@@ -28,7 +28,8 @@ least one feature exceeded its cap.}
 each absolute contribution exceeded its cap. Zero entries indicate no
 violation.}
 
-If no violations are detected (the sum of \code{excess} is zero), the function
+If no violations are detected (the sum of \code{excess} is zero), the
+function
 prints a message and returns \code{NULL} invisibly.
 }
 \description{
@@ -45,9 +46,10 @@ compared against the cap \eqn{L_j} stored in the fitted object. The returned
 }
 \examples{
 set.seed(1)
-n <- 40; p <- 8
+n <- 40
+p <- 8
 X <- matrix(rnorm(n * p), n, p)
-beta <- c(2, 1.5, rep(0, p-2))
+beta <- c(2, 1.5, rep(0, p - 2))
 y <- X \%*\% beta + rnorm(n)
 fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
 capnet_violations(fit)

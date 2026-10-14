@@ -1,21 +1,23 @@
 #' Fit a linear model with elastic net and contribution cap regularization
-#' 
-#' Fits a penalized linear model by maximum likelihood with an elastic net penalty
+#'
+#' Fits a penalized linear model by maximum likelihood with an elastic net
+#'  penalty
 #' and an additional penalty that caps per-feature contributions. The optimizer
 #' uses limited memory BFGS (L-BFGS) when there is no L1 component and
 #' Orthant-Wise Limited-Memory Quasi-Newton (OWL-QN) when L1 regularization is
-#' present. 
-#' 
+#' present.
+#'
 #' @importFrom lbfgs lbfgs
 #' @importFrom stats sd
-#' 
+#'
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
 #'  features and rows are observations.
 #' @param y Numeric response vector of length \eqn{n}.
 #' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the
-#'  contribution ceiling(s). \eqn{L_j} caps the absolute value of feature
-#'  \eqn{j}'s contribution \eqn{|z_{ij}\beta_j|} for each evaluation row \eqn{i}.
-#'  If scalar, the same ceiling is applied to all features. When \code{gamma = 0},
+#' contribution ceiling(s). \eqn{L_j} caps the absolute value of feature
+#' \eqn{j}'s contribution \eqn{|z_{ij}\beta_j|} for each evaluation row \eqn{i}.
+#' If scalar, the same ceiling is applied to all features. When \code{gamma =
+#'  0},
 #'  \code{L} has no effect on the fit.
 #' @param family Optional character scalar (e.g. \code{"binomial"}), function
 #'  (e.g. \code{stats::binomial}), or family object (e.g.
@@ -50,14 +52,15 @@
 #' @param upper.limits Optional numeric scalar or length-\eqn{p} vector of upper
 #'  bounds on coefficients. Initial parameter values must satisfy the bounds.
 #' @param tol Nonnegative numeric tolerance used for gradient masking when
-#'  \code{lower.limits} or \code{upper.limits} are specified. Default \code{1e-8}.
+#' \code{lower.limits} or \code{upper.limits} are specified. Default
+#'  \code{1e-8}.
 #' @param maxit Integer; maximum number of quasi-Newton iterations. Default
 #'  \code{1e5}.
 #' @param par Optional numeric vector of length \eqn{p+1} (intercept first,
 #'  then slopes) with initial parameter values. If \code{NULL}, uses zero
 #'  initialization.
 #' @param ... Additional arguments used in fitting. Currently unused.
-#' 
+#'
 #' @return An object of class \code{"capnet"} with components:
 #'  \item{\code{a0}}{Best intercept (numeric scalar).}
 #'  \item{\code{beta}}{Numeric vector (length \eqn{p}); fitted coefficients.}
@@ -82,7 +85,7 @@
 #'  \item{\code{multiplier}}{multiplier value passed in input.}
 #'  \item{\code{family}}{model family passed in input.}
 #'  \item{\code{call}}{The matched call.}
-#' 
+#'
 #' @details
 #' When \code{alpha > 0} and \code{lambda > 0}, OWL-QN is used to handle the
 #' L1 component; otherwise L-BFGS is used. Box constraints are enforced via
@@ -102,10 +105,11 @@
 #'
 #' @seealso [cv_capnet()], [walk_capnet()], [predict.capnet()],
 #'   [coef.capnet()], [capnet_violations()]
-#' 
+#'
 #' @examples
 #' set.seed(1)
-#' n <- 40; p <- 8
+#' n <- 40
+#' p <- 8
 #' X <- matrix(rnorm(n * p), n, p)
 #' beta <- c(2, 1.5, rep(0, p - 2))
 #' y <- as.numeric(X %*% beta + rnorm(n))
@@ -116,15 +120,18 @@
 #'
 #' # With contribution cap penalty
 #' fit1 <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = L)
-#' fit1$convergence  # check optimizer status; 0 = success
+#' fit1$convergence # check optimizer status; 0 = success
 #'
 #' # Enforce caps on a held-out evaluation set, not training rows
 #' X_new <- matrix(rnorm(10 * p), 10, p)
 #' fit2 <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = L, z = X_new)
 #'
 #' # Box constraints (non-negative coefficients)
-#' fit3 <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = L, lower.limits = 0)
-#' 
+#' fit3 <- capnet(X, y,
+#'   lambda = 0.1, alpha = 0.5, gamma = 1, L = L,
+#'   lower.limits = 0
+#' )
+#'
 #' @export
 
 
@@ -144,13 +151,12 @@ capnet <- function(X, y, L,
                    maxit = 10000L,
                    par = NULL,
                    ...) {
-  
   if (anyNA(X) || anyNA(y) || anyNA(z)) {
     stop("X, y, or z contains NA values")
   }
-  
+
   call <- match.call()
-  
+
   spec <- .capnet_spec(
     X = X, y = y, L = L,
     family = family,
@@ -165,15 +171,15 @@ capnet <- function(X, y, L,
     par = par,
     ...
   )
-  
+
   train <- .capnet_standardize_train(spec)
   cap <- .capnet_cap_context(spec)
-  
+
   params <- list(alpha = alpha, lambda = lambda, gamma = gamma)
-  
+
   fit <- .capnet_fit(train, cap, params)
-  
+
   output <- .capnet_output(train, cap, fit, params, call = call)
-  
-  return(output)
+
+  output
 }

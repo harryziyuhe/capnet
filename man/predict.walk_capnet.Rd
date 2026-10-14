@@ -23,7 +23,9 @@ Predict from a walk-forward \code{capnet} fit
 }
 \examples{
 set.seed(1)
-n <- 50; p <- 5; n_new <- 8
+n <- 50
+p <- 5
+n_new <- 8
 X <- matrix(rnorm(n * p), n, p)
 z <- matrix(rnorm(n_new * p), n_new, p)
 y <- as.numeric(X \%*\% c(1, -1, 0.5, 0, 0) + rnorm(n))

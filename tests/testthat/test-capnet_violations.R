@@ -1,6 +1,10 @@
-test_that("capnet_violations detects known cap violations from a fitted object", {
+test_that(paste0(
+  "capnet_violations detects known cap violations ",
+  "from a fitted object"
+), {
   set.seed(1)
-  n <- 60; p <- 4
+  n <- 60
+  p <- 4
   X <- matrix(rnorm(n * p), n, p)
   beta <- c(3, -3, 0, 0)
   y <- as.numeric(X %*% beta + rnorm(n))
@@ -20,7 +24,8 @@ test_that("capnet_violations detects known cap violations from a fitted object",
 
 test_that("capnet_violations reports no violations when L is generous", {
   set.seed(2)
-  n <- 60; p <- 4
+  n <- 60
+  p <- 4
   X <- matrix(rnorm(n * p), n, p)
   beta <- c(0.01, -0.01, 0, 0)
   y <- as.numeric(X %*% beta + rnorm(n))
@@ -33,10 +38,15 @@ test_that("capnet_violations reports no violations when L is generous", {
 
 test_that("capnet_violations evaluates a fresh z matrix when supplied", {
   set.seed(3)
-  n <- 50; p <- 3; m <- 10
+  n <- 50
+  p <- 3
+  m <- 10
   X <- matrix(rnorm(n * p), n, p)
   y <- as.numeric(X %*% c(2, -2, 0) + rnorm(n))
-  z <- matrix(rnorm(m * p) * 5, m, p)  # deliberately larger-scale evaluation rows
+  z <- matrix(
+    rnorm(m * p) * 5, m,
+    p
+  ) # deliberately larger-scale evaluation rows
 
   fit <- capnet(X, y, L = 0.1, alpha = 0, lambda = 0, gamma = 0)
 

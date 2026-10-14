@@ -2,9 +2,9 @@
 .capnet_output <- function(train, cap, fit, params, call = NULL) {
   a0 <- fit$a0
   beta <- fit$beta
-  
+
   value <- fit$value + params$lambda * params$alpha * sum(abs(beta))
-  
+
   sf <- train$scaling_factor
   beta_raw <- beta / sf
   if (train$intercept) {

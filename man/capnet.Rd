@@ -33,7 +33,8 @@ features and rows are observations.}
 \item{L}{Nonnegative numeric scalar or length-\eqn{p} vector giving the
 contribution ceiling(s). \eqn{L_j} caps the absolute value of feature
 \eqn{j}'s contribution \eqn{|z_{ij}\beta_j|} for each evaluation row \eqn{i}.
-If scalar, the same ceiling is applied to all features. When \code{gamma = 0},
+If scalar, the same ceiling is applied to all features. When \code{gamma =
+ 0},
 \code{L} has no effect on the fit.}
 
 \item{family}{Optional character scalar (e.g. \code{"binomial"}), function
@@ -79,7 +80,8 @@ the default zero initialization satisfies any symmetric bound.}
 bounds on coefficients. Initial parameter values must satisfy the bounds.}
 
 \item{tol}{Nonnegative numeric tolerance used for gradient masking when
-\code{lower.limits} or \code{upper.limits} are specified. Default \code{1e-8}.}
+\code{lower.limits} or \code{upper.limits} are specified. Default
+\code{1e-8}.}
 
 \item{maxit}{Integer; maximum number of quasi-Newton iterations. Default
 \code{1e5}.}
@@ -117,7 +119,8 @@ always inspect this field after fitting.}
 \item{\code{call}}{The matched call.}
 }
 \description{
-Fits a penalized linear model by maximum likelihood with an elastic net penalty
+Fits a penalized linear model by maximum likelihood with an elastic net
+penalty
 and an additional penalty that caps per-feature contributions. The optimizer
 uses limited memory BFGS (L-BFGS) when there is no L1 component and
 Orthant-Wise Limited-Memory Quasi-Newton (OWL-QN) when L1 regularization is
@@ -142,7 +145,8 @@ distort the intended contribution budget.
 }
 \examples{
 set.seed(1)
-n <- 40; p <- 8
+n <- 40
+p <- 8
 X <- matrix(rnorm(n * p), n, p)
 beta <- c(2, 1.5, rep(0, p - 2))
 y <- as.numeric(X \%*\% beta + rnorm(n))
@@ -153,14 +157,17 @@ fit0 <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 0, L = L)
 
 # With contribution cap penalty
 fit1 <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = L)
-fit1$convergence  # check optimizer status; 0 = success
+fit1$convergence # check optimizer status; 0 = success
 
 # Enforce caps on a held-out evaluation set, not training rows
 X_new <- matrix(rnorm(10 * p), 10, p)
 fit2 <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = L, z = X_new)
 
 # Box constraints (non-negative coefficients)
-fit3 <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = L, lower.limits = 0)
+fit3 <- capnet(X, y,
+  lambda = 0.1, alpha = 0.5, gamma = 1, L = L,
+  lower.limits = 0
+)
 
 }
 \seealso{

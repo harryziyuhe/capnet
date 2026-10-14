@@ -1,7 +1,6 @@
 make_likelihood <- function(family, X, y) {
-  
   n <- length(y)
-  
+
   if (family$family == "gaussian") {
     loss <- function(beta0, beta) {
       eta <- as.vector(beta0 + X %*% beta)
@@ -9,14 +8,14 @@ make_likelihood <- function(family, X, y) {
     }
     gradient <- function(beta0, beta) {
       eta <- as.vector(beta0 + X %*% beta)
-      r <- (eta - y)                       # note sign for convenience
+      r <- (eta - y) # note sign for convenience
       g0 <- sum(r) / n
       gb <- as.vector(crossprod(X, r) / n)
       list(g0 = g0, gb = gb)
     }
     return(list(loss = loss, gradient = gradient, family = family))
   }
-  
+
   if (family$family == "binomial") {
     loss <- function(beta0, beta) {
       eta <- as.vector(beta0 + X %*% beta)
@@ -32,7 +31,7 @@ make_likelihood <- function(family, X, y) {
     }
     return(list(loss = loss, gradient = gradient, family = family))
   }
-  
+
   if (family$family == "poisson") {
     loss <- function(beta0, beta) {
       eta <- as.vector(beta0 + X %*% beta)
@@ -49,24 +48,24 @@ make_likelihood <- function(family, X, y) {
     }
     return(list(loss = loss, gradient = gradient, family = family))
   }
-  
+
   if (family$family == "Gamma") {
     # log link only, constants dropped
     loss <- function(beta0, beta) {
       eta <- as.vector(beta0 + X %*% beta)
       mu <- safe_exp(eta)
-      mean(y / mu + log(mu))              # = mean(y*exp(-eta) + eta)
+      mean(y / mu + log(mu)) # = mean(y*exp(-eta) + eta)
     }
     gradient <- function(beta0, beta) {
       eta <- as.vector(beta0 + X %*% beta)
       mu <- safe_exp(eta)
-      r <- (1 - y / mu)                   # d/deta
+      r <- (1 - y / mu) # derivative with respect to eta
       g0 <- mean(r)
       gb <- as.vector(crossprod(X, r) / n)
       list(g0 = g0, gb = gb)
     }
     return(list(loss = loss, gradient = gradient, family = family))
   }
-  
+
   stop("Unsupported family.", call. = FALSE)
 }

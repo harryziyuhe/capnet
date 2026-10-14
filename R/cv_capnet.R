@@ -3,7 +3,7 @@
 #' Runs a grid search over \code{alpha} and \code{lambda} with K-fold
 #' cross-validation for the \code{capnet()} model. Returns the searched grid,
 #' fold-wise errors, mean errors, and the best hyperparameters.
-#' 
+#'
 #' @importFrom stats sd predict
 #'
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
@@ -16,10 +16,11 @@
 #' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the
 #'  contribution ceiling(s). If scalar, the same ceiling is applied to all
 #'  features.
-#' @param family Optional character scalar (e.g. "binomial"), function (e.g. 
+#' @param family Optional character scalar (e.g. "binomial"), function (e.g.
 #' \code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).
 #' @param intercept Logical; should an intercept be fitted? Default \code{TRUE}.
-#' @param lambda Numeric vector (default \code{exp(seq(1, -5, length.out = 50))})
+#' @param lambda Numeric vector (default \code{exp(seq(1, -5, length.out =
+#'  50))})
 #'  of nonnegative elastic-net penalty strengths to search.
 #' @param alpha Numeric vector (default \code{seq(0, 1, length.out = 5)}) with
 #'  values in \eqn{[0,1]} to search (elastic-net mixing parameters;
@@ -29,7 +30,8 @@
 #' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
 #'  scale feature contributions during the capping step; defaults to 1.
 #' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
-#'  are standardized for fitting; coefficients are returned on the original scale.
+#' are standardized for fitting; coefficients are returned on the original
+#'  scale.
 #'  Default \code{TRUE}.
 #' @param splits Optional integer vector of length \eqn{n} giving the fold
 #'  assignment for each row. Each unique integer value defines one fold; rows
@@ -60,7 +62,7 @@
 #'  value) and at 90 to avoid exhausting R's 128-connection limit.
 #' @param ... Additional arguments forwarded to \code{capnet()}, e.g.,
 #'  \code{lower.limits}, \code{upper.limits}, \code{tol}, \code{maxit}.
-#' 
+#'
 #' @return An object of class \code{"cv_capnet"} with components:
 #'  \item{\code{alpha}}{Numeric vector of alpha values searched.}
 #'  \item{\code{lambda}}{Numeric vector of lambda values searched.}
@@ -79,7 +81,7 @@
 #'    best_lambda)}. For \code{"mse"}, \code{"logloss"}, \code{"deviance"},
 #'    and \code{"brier"} this is the minimum; for \code{"rsq"} it is the
 #'    maximum.}
-#' 
+#'
 #' @details
 #' If \code{splits} is \code{NULL}, folds are generated as
 #' \code{sample(rep(1:K, length.out = n))}. Set a seed beforehand to reproduce
@@ -97,31 +99,34 @@
 #'   # Walk-forward folds: fold k tests the k-th block of rows
 #'   splits <- rep(seq_len(K), each = ceiling(n / K))[seq_len(n)]
 #' }
-#' 
+#'
 #' @seealso [capnet()], [walk_capnet()], [plot.cv_capnet()]
 #'
 #' @examples
 #' \donttest{
-#'   set.seed(1)
-#'   n <- 80; p <- 10
-#'   X <- matrix(rnorm(n * p), n, p)
-#'   beta <- c(1.2, 0.7, 0.5, rep(0, p - 3))
-#'   y <- as.numeric(X %*% beta + rnorm(n))
+#' set.seed(1)
+#' n <- 80
+#' p <- 10
+#' X <- matrix(rnorm(n * p), n, p)
+#' beta <- c(1.2, 0.7, 0.5, rep(0, p - 3))
+#' y <- as.numeric(X %*% beta + rnorm(n))
 #'
-#'   # Basic cross-validation
-#'   cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
-#'   cv$best_alpha; cv$best_lambda; cv$best_error
+#' # Basic cross-validation
+#' cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
+#' cv$best_alpha
+#' cv$best_lambda
+#' cv$best_error
 #'
-#'   # Visualize the CV error surface
-#'   plot(cv)
-#'   plot(cv, alpha = cv$best_alpha)
+#' # Visualize the CV error surface
+#' plot(cv)
+#' plot(cv, alpha = cv$best_alpha)
 #'
-#'   # Time-ordered data: use sequential folds to avoid leakage
-#'   K <- 5
-#'   splits <- rep(seq_len(K), each = ceiling(n / K))[seq_len(n)]
-#'   cv_ts <- cv_capnet(X, y, gamma = 1, L = 1.5, splits = splits)
+#' # Time-ordered data: use sequential folds to avoid leakage
+#' K <- 5
+#' splits <- rep(seq_len(K), each = ceiling(n / K))[seq_len(n)]
+#' cv_ts <- cv_capnet(X, y, gamma = 1, L = 1.5, splits = splits)
 #' }
-#' 
+#'
 #' @export
 
 cv_capnet <- function(X, y,
@@ -132,7 +137,7 @@ cv_capnet <- function(X, y,
                       z = NULL,
                       multiplier = 1,
                       intercept = TRUE,
-                      standardize = TRUE, 
+                      standardize = TRUE,
                       splits = NULL,
                       K = 5,
                       metric = c("mse", "rsq", "logloss", "brier", "deviance"),
@@ -145,9 +150,9 @@ cv_capnet <- function(X, y,
 
   X <- as.matrix(X)
   y <- as.numeric(y)
-  
+
   n <- nrow(X)
-  
+
   # Default to K-folds split if not specified
   if (is.null(splits)) {
     splits <- sample(rep(seq_len(K), length.out = n))
@@ -155,7 +160,7 @@ cv_capnet <- function(X, y,
     splits <- as.integer(splits)
     K <- length(unique(splits))
   }
-  
+
   spec <- .capnet_spec(
     X = X, y = y, L = L,
     family = family,
@@ -165,7 +170,7 @@ cv_capnet <- function(X, y,
     multiplier = multiplier,
     ...
   )
-  
+
   if (metric_missing) {
     f <- tolower(spec$family$family)
     metric <- switch(f,
@@ -176,7 +181,7 @@ cv_capnet <- function(X, y,
       "mse"
     )
   }
-  
+
   cv_errors <- array(
     NA_real_,
     dim = c(length(alpha), length(lambda), K),
@@ -186,7 +191,7 @@ cv_capnet <- function(X, y,
       paste0("fold_", seq_len(K))
     )
   )
-  
+
   # Precompute per-fold contexts once; shared read-only across that fold's
   # alpha tasks below.
   fold_contexts <- lapply(seq_len(K), function(fold) {
@@ -209,7 +214,10 @@ cv_capnet <- function(X, y,
   }), recursive = FALSE)
 
   if (verbose >= 1) {
-    message(sprintf("cv_capnet: fitting %d (fold x alpha) tasks...", length(tasks)))
+    message(sprintf(
+      "cv_capnet: fitting %d (fold x alpha) tasks...",
+      length(tasks)
+    ))
   }
 
   run_task <- function(task) {
@@ -263,13 +271,17 @@ cv_capnet <- function(X, y,
   }
 
   mean_errors <- apply(cv_errors, c(1, 2), mean, na.rm = TRUE)
-  
+
   if (metric == "mse") {
-    best <- which(mean_errors == min(mean_errors, na.rm = TRUE), arr.ind = TRUE)[1, ]
+    best <- which(mean_errors == min(mean_errors, na.rm = TRUE),
+      arr.ind = TRUE
+    )[1, ]
   } else {
-    best <- which(mean_errors == max(mean_errors, na.rm = TRUE), arr.ind = TRUE)[1, ]
+    best <- which(mean_errors == max(mean_errors, na.rm = TRUE),
+      arr.ind = TRUE
+    )[1, ]
   }
-  
+
   structure(list(
     alpha = alpha,
     lambda = lambda,
@@ -287,26 +299,24 @@ cv_capnet <- function(X, y,
 }
 
 .cv_capnet_error <- function(y, pred, family, metric) {
-  f <- tolower(family$family)
-  
   if (metric == "mse") {
     return(mean((y - pred)^2))
   }
-  
+
   if (metric == "rsq") {
     return(1 - sum((y - pred)^2) / sum((y - mean(y))^2))
   }
-  
+
   if (metric == "logloss") {
     eps <- 1e-15
     p <- pmin(pmax(pred, eps), 1 - eps)
     return(-mean(y * log(p) + (1 - y) * log(1 - p)))
   }
-  
+
   if (metric == "brier") {
-    return(mean((y - pred) ^ 2))
+    return(mean((y - pred)^2))
   }
-  
+
   if (metric == "deviance") {
     if (!is.null(family$dev.resids)) {
       d <- family$dev.resids(y, pred, wt = rep(1, length(y)))
@@ -314,6 +324,6 @@ cv_capnet <- function(X, y,
     }
     stop("Family does not provide dev.resids; cannot compute deviance.")
   }
-  
+
   stop("Unsupported metric: ", metric)
 }

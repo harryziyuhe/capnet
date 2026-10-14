@@ -36,12 +36,14 @@ simulate_capnet_data(
 the function returns a \code{Z} matrix of \code{m} rows drawn from the same
 DGP as \code{X}. Default \code{0} (no evaluation set returned).}
 
-\item{mode}{Character; one of \code{"basic"} or \code{"proxy"}. Default \code{"basic"}.}
+\item{mode}{Character; one of \code{"basic"} or \code{"proxy"}. Default
+\code{"basic"}.}
 
 \item{sparsity}{Numeric in \eqn{[0,1]}; fraction of nonzero coefficients
 in \code{beta_true}. Default \code{0.7}}
 
-\item{beta_range}{Numeric length-2; uniform range for nonzero \code{beta_true}
+\item{beta_range}{Numeric length-2; uniform range for nonzero
+\code{beta_true}
 entries. Default \code{c(-2, 2)}.}
 
 \item{sigma}{Positive numeric; noise sd for \code{y}. Only used when
@@ -49,9 +51,11 @@ entries. Default \code{c(-2, 2)}.}
 
 \item{seed}{Optional integer for reproducibility. Default \code{NULL}.}
 
-\item{xstar_sd}{Positive numeric; sd of latent true signal \eqn{X^*}. Default \code{1}.}
+\item{xstar_sd}{Positive numeric; sd of latent true signal \eqn{X^*}. Default
+\code{1}.}
 
-\item{a_sd}{Nonnegative numeric; sd of log-scales \code{a_j = exp(N(0, a_sd^2))}.
+\item{a_sd}{Nonnegative numeric; sd of log-scales \code{a_j = exp(N(0,
+a_sd^2))}.
 Default \code{0.3}.}
 
 \item{unstable_idx}{Optional integer vector of columns of \code{X} with
@@ -61,7 +65,8 @@ are sampled at random.}
 \item{unstable_frac}{Numeric in \eqn{[0,1]}; fraction of features to label
 unstable when \code{unstable_idx} is \code{NULL}. Default \code{0.25}.}
 
-\item{sigma_low}{Positive numeric; base noise sd for \code{X}. Default \code{1}.}
+\item{sigma_low}{Positive numeric; base noise sd for \code{X}. Default
+\code{1}.}
 
 \item{sigma_high}{Positive numeric; intermittent high noise sd for unstable
 features. Default \code{8}.}
@@ -116,10 +121,14 @@ For \code{mode = "proxy"}, additional fields are included:
 }
 \description{
 Creates synthetic regression data for two scenarios with a unified return
-format. In both cases the function returns \code{X}, \code{y}, the ground-truth
-coefficients \code{beta_true}, and suggested caps \code{L}. When \code{m > 0},
-an evaluation matrix \code{Z} of \code{m} rows is also returned, generated from
-the same data-generating process and ready to pass as the \code{z} argument of
+format. In both cases the function returns \code{X}, \code{y}, the
+ground-truth
+coefficients \code{beta_true}, and suggested caps \code{L}. When \code{m >
+0},
+an evaluation matrix \code{Z} of \code{m} rows is also returned, generated
+from
+the same data-generating process and ready to pass as the \code{z} argument
+of
 \code{capnet()} or \code{walk_capnet()}.
 }
 \details{
@@ -151,23 +160,31 @@ simulating data under \code{mode = "proxy"}.
 \examples{
 set.seed(42)
 d_basic <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5)
-names(d_basic)  # includes Z
+names(d_basic) # includes Z
 
-d_pois <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
-                                family = "poisson", poisson_mean = 15)
+d_pois <- simulate_capnet_data(
+  n = 100, p = 10, m = 20, sparsity = 0.5,
+  family = "poisson", poisson_mean = 15
+)
 range(d_pois$y)
 
-d_binom <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
-                                 family = "binomial", binomial_prob = 0.3)
+d_binom <- simulate_capnet_data(
+  n = 100, p = 10, m = 20, sparsity = 0.5,
+  family = "binomial", binomial_prob = 0.3
+)
 table(d_binom$y)
 
-d_gamma <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
-                                 family = "gamma", gamma_mean = 5)
+d_gamma <- simulate_capnet_data(
+  n = 100, p = 10, m = 20, sparsity = 0.5,
+  family = "gamma", gamma_mean = 5
+)
 range(d_gamma$y)
 
-d_proxy <- simulate_capnet_data(mode = "proxy", n = 300, p = 8, m = 50,
-                                sparsity = 0.6, unstable_frac = 0.25,
-                                sigma_low = 1, sigma_high = 6, high_prob = 0.2)
-names(d_proxy)  # includes Z and X_latent
+d_proxy <- simulate_capnet_data(
+  mode = "proxy", n = 300, p = 8, m = 50,
+  sparsity = 0.6, unstable_frac = 0.25,
+  sigma_low = 1, sigma_high = 6, high_prob = 0.2
+)
+names(d_proxy) # includes Z and X_latent
 
 }

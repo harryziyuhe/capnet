@@ -29,12 +29,15 @@ change sign along the path.
 }
 \examples{
 set.seed(1)
-n <- 50; p <- 6
+n <- 50
+p <- 6
 X <- matrix(rnorm(n * p), n, p)
 colnames(X) <- paste0("x", seq_len(p))
 y <- as.numeric(X \%*\% c(1.5, -1, 0.5, 0, 0, 0) + rnorm(n))
-path <- coef_path(X, y, L = 0.5, alpha = 0.5,
-                  lambda = exp(seq(1, -5, length.out = 30)), gamma = 1)
+path <- coef_path(X, y,
+  L = 0.5, alpha = 0.5,
+  lambda = exp(seq(1, -5, length.out = 30)), gamma = 1
+)
 plot(path)
 
 }

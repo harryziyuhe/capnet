@@ -22,12 +22,13 @@ Returns the estimated intercept and coefficients from a fitted
 }
 \examples{
 set.seed(1)
-n <- 40; p <- 5
+n <- 40
+p <- 5
 X <- matrix(rnorm(n * p), n, p)
 y <- as.numeric(X \%*\% c(1, -1, 0.5, 0, 0) + rnorm(n))
 fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
-coef(fit)          # (1 + p) x 1 matrix
-coef(fit)[-1, ]    # slopes only
+coef(fit) # (1 + p) x 1 matrix
+coef(fit)[-1, ] # slopes only
 
 }
 \seealso{

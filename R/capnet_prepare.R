@@ -10,31 +10,31 @@
   tol = 1e-8,
   maxit = 10000L,
   par = NULL,
-    ...
+  ...
 ) {
   X <- as.matrix(X)
   y <- as.numeric(y)
-  
+
   n <- nrow(X)
   p <- ncol(X)
   if (length(y) != n) stop("y must have length nrow(X).")
-  
+
   family <- normalize_family(family)
   validate_family_supported(family)
-  
+
   z <- z %||% X
   z <- as.matrix(z)
   if (ncol(z) != p) stop("z must have same number of columns as X.")
 
   m <- nrow(z)
-  
+
   multiplier <- as.numeric(multiplier)
   if (length(multiplier) == 1) {
     multiplier <- rep(multiplier, m)
   } else if (length(multiplier) != m) {
     stop("multiplier must be length 1 or length nrow(z).")
   }
-  
+
   if (is.null(L)) stop("L must be provided (scalar or length p).")
   L <- as.numeric(L)
   if (length(L) == 1) {
@@ -42,7 +42,7 @@
   } else if (length(L) != p) {
     stop("L must be length 1 or length ncol(X).")
   }
-  
+
   # Set default lower and upper bounds
   if (is.null(lower.limits)) {
     lower.limits <- rep(-Inf, p)
@@ -51,7 +51,7 @@
   } else if (length(lower.limits) != p) {
     stop("Lower limits dimension mismatch.")
   }
-  
+
   if (is.null(upper.limits)) {
     upper.limits <- rep(Inf, p)
   } else if (length(upper.limits) == 1) {
@@ -59,9 +59,9 @@
   } else if (length(upper.limits) != p) {
     stop("Lower limits dimension mismatch.")
   }
-  
+
   if (!is.null(par)) par <- as.numeric(par)
-  
+
   list(
     X = X,
     y = y,
@@ -84,10 +84,10 @@
 .capnet_standardize_train <- function(spec, idx_train = NULL) {
   if (is.null(idx_train)) idx_train <- seq_len(spec$n)
   idx_train <- as.integer(idx_train)
-  
+
   X_train_raw <- spec$X[idx_train, , drop = FALSE]
   y_train <- spec$y[idx_train]
-  
+
   if (!spec$standardize) {
     X_center <- rep(0, spec$p)
     X_scale <- rep(1, spec$p)
@@ -100,12 +100,12 @@
     X_scale[X_scale == 0] <- 1
     X_train <- sweep(X_train_raw, 2, X_center, "-")
     X_train <- sweep(X_train, 2, X_scale, "/")
-    
+
     lower.limits <- spec$lower.limits * X_scale
     upper.limits <- spec$upper.limits * X_scale
   }
   scaling_factor <- X_scale
-  
+
   par0 <- spec$par
   if (is.null(par0)) {
     par0 <- rep(0, 1 + spec$p)
@@ -114,7 +114,7 @@
       stop("par must be length 1 + ncol(X).")
     }
   }
-  
+
   list(
     X = X_train,
     y = y_train,

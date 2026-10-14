@@ -43,14 +43,15 @@ that appear in the searched grid.
 }
 \examples{
 \donttest{
-  set.seed(1)
-  n <- 80; p <- 10
-  X <- matrix(rnorm(n * p), n, p)
-  y <- as.numeric(X \%*\% c(rep(1, 3), rep(0, p - 3)) + rnorm(n))
-  cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
-  plot(cv)                        # full heatmap
-  plot(cv, alpha = cv$best_alpha) # error vs lambda slice
-  plot(cv, lambda = cv$best_lambda) # error vs alpha slice
+set.seed(1)
+n <- 80
+p <- 10
+X <- matrix(rnorm(n * p), n, p)
+y <- as.numeric(X \%*\% c(rep(1, 3), rep(0, p - 3)) + rnorm(n))
+cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
+plot(cv) # full heatmap
+plot(cv, alpha = cv$best_alpha) # error vs lambda slice
+plot(cv, lambda = cv$best_lambda) # error vs alpha slice
 }
 
 }

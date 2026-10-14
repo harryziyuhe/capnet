@@ -27,13 +27,14 @@ for that row-feature combination.
 }
 \examples{
 set.seed(1)
-n <- 40; p <- 5
+n <- 40
+p <- 5
 X <- matrix(rnorm(n * p), n, p)
 y <- as.numeric(X \%*\% c(2, -1.5, 0, 0, 0) + rnorm(n))
 fit <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 0.1, L = 0.5)
 v <- capnet_violations(fit)
-if (!is.null(v)) print(v)         # sparse display of excess contributions
-if (!is.null(v)) v$excess[1:5, ]  # raw access
+if (!is.null(v)) print(v) # sparse display of excess contributions
+if (!is.null(v)) v$excess[1:5, ] # raw access
 
 }
 \seealso{

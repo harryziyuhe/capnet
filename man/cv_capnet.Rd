@@ -43,7 +43,8 @@ features.}
 \item{family}{Optional character scalar (e.g. "binomial"), function (e.g.
 \code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).}
 
-\item{lambda}{Numeric vector (default \code{exp(seq(1, -5, length.out = 50))})
+\item{lambda}{Numeric vector (default \code{exp(seq(1, -5, length.out =
+50))})
 of nonnegative elastic-net penalty strengths to search.}
 
 \item{alpha}{Numeric vector (default \code{seq(0, 1, length.out = 5)}) with
@@ -59,7 +60,8 @@ scale feature contributions during the capping step; defaults to 1.}
 \item{intercept}{Logical; should an intercept be fitted? Default \code{TRUE}.}
 
 \item{standardize}{Logical; if \code{TRUE}, columns of \code{X} and \code{y}
-are standardized for fitting; coefficients are returned on the original scale.
+are standardized for fitting; coefficients are returned on the original
+scale.
 Default \code{TRUE}.}
 
 \item{splits}{Optional integer vector of length \eqn{n} giving the fold
@@ -143,24 +145,27 @@ test fold lies strictly after its training fold:
 }
 \examples{
 \donttest{
-  set.seed(1)
-  n <- 80; p <- 10
-  X <- matrix(rnorm(n * p), n, p)
-  beta <- c(1.2, 0.7, 0.5, rep(0, p - 3))
-  y <- as.numeric(X \%*\% beta + rnorm(n))
+set.seed(1)
+n <- 80
+p <- 10
+X <- matrix(rnorm(n * p), n, p)
+beta <- c(1.2, 0.7, 0.5, rep(0, p - 3))
+y <- as.numeric(X \%*\% beta + rnorm(n))
 
-  # Basic cross-validation
-  cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
-  cv$best_alpha; cv$best_lambda; cv$best_error
+# Basic cross-validation
+cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
+cv$best_alpha
+cv$best_lambda
+cv$best_error
 
-  # Visualize the CV error surface
-  plot(cv)
-  plot(cv, alpha = cv$best_alpha)
+# Visualize the CV error surface
+plot(cv)
+plot(cv, alpha = cv$best_alpha)
 
-  # Time-ordered data: use sequential folds to avoid leakage
-  K <- 5
-  splits <- rep(seq_len(K), each = ceiling(n / K))[seq_len(n)]
-  cv_ts <- cv_capnet(X, y, gamma = 1, L = 1.5, splits = splits)
+# Time-ordered data: use sequential folds to avoid leakage
+K <- 5
+splits <- rep(seq_len(K), each = ceiling(n / K))[seq_len(n)]
+cv_ts <- cv_capnet(X, y, gamma = 1, L = 1.5, splits = splits)
 }
 
 }

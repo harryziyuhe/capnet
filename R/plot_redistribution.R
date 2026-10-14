@@ -1,5 +1,5 @@
 #' Plot redistribution of coefficients and contributions
-#' 
+#'
 #' Compares regression coefficients and per-feature contributions between an
 #' uncapped and a capped \code{capnet} fit. Produces either side-by-side
 #' ("raw") bar charts of levels or ("delta") bar charts of changes.
@@ -17,10 +17,10 @@
 #'  so that contributions are comparable.
 #' @param X Optional numeric matrix of features used to compute contributions.
 #'  If \code{NULL}, the function uses \code{capped$z}.
-#' @param multiplier Optional numeric scalar or length-\eqn{n} vector of 
-#'  multipliers to scale contributions. If \code{NULL}, uses 
+#' @param multiplier Optional numeric scalar or length-\eqn{n} vector of
+#'  multipliers to scale contributions. If \code{NULL}, uses
 #'  \code{capped$multiplier} when available; otherwise defaults to 1.
-#' @param top_n Integer (\eqn{\ge 1}) or \code{Inf}. Number of features to 
+#' @param top_n Integer (\eqn{\ge 1}) or \code{Inf}. Number of features to
 #'  display. Features are ordered by input column order; set \code{top_n = Inf}
 #'  to include all.
 #' @param plot Character string, one of \code{"raw"} or \code{"delta"}.
@@ -39,52 +39,62 @@
 #' }
 #' The function prints both plots and invisibly returns the list
 #' \code{list("beta" = p1, "contribution" = p2)}
-#' 
+#'
 #' @details
 #' For each model, per-row contributions are computed as
 #' \eqn{contrib_{ij} = X_{ij}\hat\beta_j \times multiplier_i}; the displayed
 #' contribution for feature \eqn{j} is the mean over rows:
-#' \eqn{\bar{contrib}_j = \mathrm{mean}_i(X_{ij}\hat\beta_j \times multiplier_i)}.
+#' \eqn{\bar{contrib}_j = \mathrm{mean}_i(X_{ij}\hat\beta_j \times
+#'  multiplier_i)}.
 #' The \code{multiplier} from the \code{capped} model is used; if the two models
 #' were fit with different multipliers the comparison may be misleading.
 #'
 #' @seealso [capnet()], [capnet_violations()]
-#' 
+#'
 #' @examples
 #' set.seed(1)
-#' n <- 40; p <- 6
+#' n <- 40
+#' p <- 6
 #' X <- matrix(rnorm(n * p), n, p)
 #' beta <- c(1.5, 0.8, 0.2, rep(0, p - 3))
 #' y <- as.numeric(X %*% beta + rnorm(n))
 #' fit_uncap <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 0, L = 1)
-#' fit_cap   <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 1, L = 1)
+#' fit_cap <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 1, L = 1)
 #' plot_redistribution(fit_uncap, fit_cap, plot = "delta")
-#' 
+#'
 #' @export
 
 plot_redistribution <- function(uncapped, capped, X = NULL,
                                 multiplier = NULL, top_n = Inf,
                                 plot = c("raw", "delta")) {
   plot <- match.arg(plot)
-  
+
   beta_uncapped <- uncapped$beta
   beta_capped <- capped$beta
-  
+
   X <- if (!is.null(X)) X else capped$z
   if (!is.null(multiplier)) {
     if (length(multiplier) == 1) multiplier <- rep(multiplier, nrow(X))
-  } else multiplier <- capped$multiplier
-  
-  contribution_uncapped <- sweep(sweep(X, 2, beta_uncapped, "*"), 1, multiplier, "*")
-  contribution_capped <- sweep(sweep(X, 2, beta_capped, "*"), 1, multiplier, "*")
-  
+  } else {
+    multiplier <- capped$multiplier
+  }
+
+  contribution_uncapped <- sweep(
+    sweep(X, 2, beta_uncapped, "*"), 1,
+    multiplier, "*"
+  )
+  contribution_capped <- sweep(
+    sweep(X, 2, beta_capped, "*"), 1, multiplier,
+    "*"
+  )
+
   mean_contribution_uncapped <- colMeans(contribution_uncapped)
   mean_contribution_capped <- colMeans(contribution_capped)
-  
+
   if (is.null(colnames(X))) {
     colnames(X) <- paste0("V", seq_len(ncol(X)))
   }
-  
+
   df <- data.frame(
     variable = colnames(X),
     beta_uncapped = beta_uncapped,
@@ -92,34 +102,38 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
     contribution_uncapped = mean_contribution_uncapped,
     contribution_capped = mean_contribution_capped
   )
-  
+
   df$delta_beta <- df$beta_capped - df$beta_uncapped
   df$delta_contribution <- df$contribution_capped - df$contribution_uncapped
-  
+
   if (is.finite(top_n)) {
     df_top <- head(df, top_n)
-    var_level = unique(colnames(X))[1:top_n]
+    var_level <- unique(colnames(X))[1:top_n]
   } else {
     df_top <- df
-    var_level = unique(colnames(X))
+    var_level <- unique(colnames(X))
   }
-  
+
   if (plot == "delta") {
-    p1 <- ggplot(df_top, aes(x = reorder(.data$variable, .data$delta_beta), 
-                             y = .data$delta_beta)) +
+    p1 <- ggplot(df_top, aes(
+      x = reorder(.data$variable, .data$delta_beta),
+      y = .data$delta_beta
+    )) +
       geom_bar(stat = "identity", fill = "steelblue") +
       coord_flip() +
-      theme_minimal() + 
+      theme_minimal() +
       labs(
         title = "Change in Coefficients",
         x = NULL, y = NULL
       )
-    
-    p2 <- ggplot(df_top, aes(x = reorder(.data$variable, .data$delta_contribution), 
-                             y = .data$delta_contribution)) +
+
+    p2 <- ggplot(df_top, aes(
+      x = reorder(.data$variable, .data$delta_contribution),
+      y = .data$delta_contribution
+    )) +
       geom_bar(stat = "identity", fill = "steelblue") +
       coord_flip() +
-      theme_minimal() + 
+      theme_minimal() +
       labs(
         title = "Change in Contributions",
         x = NULL, y = NULL
@@ -130,23 +144,30 @@ plot_redistribution <- function(uncapped, capped, X = NULL,
       model = rep(c("Uncapped", "Capped"), each = nrow(df_top)),
       beta = c(df_top$beta_uncapped, df_top$beta_capped)
     )
-    p1 <- ggplot(df_beta, aes(x = .data$variable, 
-                              y = .data$beta, 
-                              fill = .data$model)) +
+    p1 <- ggplot(df_beta, aes(
+      x = .data$variable,
+      y = .data$beta,
+      fill = .data$model
+    )) +
       geom_col(position = position_dodge(width = 0.6), width = 0.6) +
       labs(title = "Beta Comparison", y = "Beta", x = NULL, fill = "Model") +
       theme_minimal()
-    
+
     df_contrib <- data.frame(
       variable = factor(rep(df_top$variable, times = 2), levels = var_level),
       model = rep(c("Uncapped", "Capped"), each = nrow(df_top)),
       contribution = c(df_top$contribution_uncapped, df_top$contribution_capped)
     )
-    p2 <- ggplot(df_contrib, aes(x = .data$variable, 
-                                 y = .data$contribution, 
-                                 fill = .data$model)) +
+    p2 <- ggplot(df_contrib, aes(
+      x = .data$variable,
+      y = .data$contribution,
+      fill = .data$model
+    )) +
       geom_col(position = position_dodge(width = 0.6), width = 0.6) +
-      labs(title = "Contribution Comparison", y = "Contribution", x = NULL, fill = "Model") +
+      labs(
+        title = "Contribution Comparison", y = "Contribution",
+        x = NULL, fill = "Model"
+      ) +
       theme_minimal()
   }
   list(

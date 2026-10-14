@@ -24,7 +24,8 @@ coef_path(
 contribution ceiling(s). If scalar, the same ceiling is applied to all
 coefficients.}
 
-\item{lambda}{Numeric vector (default \code{exp(seq(1, -5, length.out = 50))})
+\item{lambda}{Numeric vector (default \code{exp(seq(1, -5, length.out =
+50))})
 of nonnegative elastic-net penalties to trace.}
 
 \item{alpha}{Numeric scalar in \eqn{[0,1]} (default \code{0.5}); the
@@ -67,13 +68,16 @@ Pass the result to \code{plot()} to visualize the coefficient paths.
 }
 \examples{
 set.seed(1)
-n <- 50; p <- 8
+n <- 50
+p <- 8
 X <- matrix(rnorm(n * p), n, p)
 colnames(X) <- paste0("x", seq_len(p))
 beta <- c(1.5, 0.8, 0.2, rep(0, p - 3))
 y <- as.numeric(X \%*\% beta + rnorm(n))
-path <- coef_path(X, y, L = 0.5, alpha = 0.5,
-                  lambda = exp(seq(1, -5, length.out = 50)), gamma = 1)
+path <- coef_path(X, y,
+  L = 0.5, alpha = 0.5,
+  lambda = exp(seq(1, -5, length.out = 50)), gamma = 1
+)
 plot(path)
 }
 \seealso{

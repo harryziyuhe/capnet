@@ -7,7 +7,9 @@
 # (fold, alpha) / walk-forward-step tasks capnet dispatches. PSOCK clusters
 # work cross-platform, including Windows.
 .capnet_lapply <- function(X, FUN, parallel = FALSE, workers = NULL) {
-  if (!isTRUE(parallel)) return(lapply(X, FUN))
+  if (!isTRUE(parallel)) {
+    return(lapply(X, FUN))
+  }
 
   # FUN is a closure defined inside the caller (cv_capnet()/walk_capnet()),
   # so its enclosing frame may still hold unforced argument promises (e.g.

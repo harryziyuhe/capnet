@@ -16,11 +16,11 @@
 #'
 #' @importFrom xts is.xts as.xts
 #' @importFrom zoo index
-#' 
+#'
 #' @param X Numeric predictor matrix of shape \eqn{n\times p}. Columns are
 #'  features and rows are observations.
 #' @param y Numeric response vector of length \eqn{n}.
-#' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the 
+#' @param L Nonnegative numeric scalar or length-\eqn{p} vector giving the
 #'  contribution ceiling(s). If scalar, the same ceiling is applied to all
 #'  coefficients
 #' @param z Numeric matrix with \eqn{p} columns (required). Each row of
@@ -28,24 +28,27 @@
 #'  order, enforcing the cap on \code{walk} rows at a time. Must be on the
 #'  same scale as \code{X}. If \code{z} is an \code{xts} object, the output
 #'  matrices will also be \code{xts} with the same index.
-#' @param family Optional character scalar (e.g. "binomial"), function (e.g. 
+#' @param family Optional character scalar (e.g. "binomial"), function (e.g.
 #' \code{stats::binomial}), or family object (e.g. \code{stats::binomial()}).
 #' @param intercept Logical; should an intercept be fitted? Default \code{TRUE}.
 #' @param standardize Logical; if \code{TRUE}, columns of \code{X} and \code{y}
-#'  are standardized for fitting; coefficients are returned on the original scale.
+#' are standardized for fitting; coefficients are returned on the original
+#'  scale.
 #'  Default \code{TRUE}.
 #' @param multiplier Optional numeric scalar or length-\eqn{n} vector used to
 #'  scale feature contributions during the capping step. Defaults to 1.
 #' @param walk Positive integer; number of consecutive rows of \code{z}
-#'  predicted as a batch at each step. At step \eqn{s}, rows
-#'  \eqn{(s-1)\cdot\mathrm{walk}+1} through \eqn{s\cdot\mathrm{walk}} of \code{z}
+#' predicted as a batch at each step. At step \eqn{s}, rows
+#' \eqn{(s-1)\cdot\mathrm{walk}+1} through \eqn{s\cdot\mathrm{walk}} of \code{z}
 #'  are used to enforce the cap and generate predictions together. If
 #'  \code{nrow(z)} is not evenly divisible by \code{walk}, the last step
-#'  covers the remaining rows. Default \code{1} (one row per step).
-#' @param lambda Nonnegative numeric scalar; overall strength of the elastic net penalty. 
+#' covers the remaining rows. Default \code{1} (one row per step).
+#' @param lambda Nonnegative numeric scalar; overall strength of the elastic net
+#'  penalty.
 #' @param alpha Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
-#'  \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
-#' @param gamma Nonnegative numeric scalar; strength of the contribution-cap penalty.
+#' \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.
+#' @param gamma Nonnegative numeric scalar; strength of the contribution-cap
+#'  penalty.
 #' @param max_gamma_tries Positive integer; maximum number of optimizer retries
 #'  per step with a reduced \code{gamma}. If the optimizer fails to converge
 #'  (convergence code \eqn{< 0}, excluding the benign \code{-1001} rounding
@@ -59,9 +62,10 @@
 #' @param workers Optional integer; number of parallel workers to use when
 #'  \code{parallel = TRUE}. Defaults to \code{min(n_steps, detectCores() - 1,
 #'  90)}: capped at the number of walk steps (idle workers add no value) and
-#'  at 90 to avoid exhausting R's 128-connection limit.
-#' @param ... Additional arguments used in fitting. See [capnet()] for more details.
-#' 
+#' at 90 to avoid exhausting R's 128-connection limit.
+#' @param ... Additional arguments used in fitting. See [capnet()] for more
+#'  details.
+#'
 #' @return An object of class \code{"walk_capnet"} with components (each of
 #'  length / size \eqn{\mathrm{nrow}(z)}, or an \code{xts} with the same
 #'  index if \code{z} is \code{xts}):
@@ -79,7 +83,7 @@
 #'  \item{\code{gammas}}{\eqn{\mathrm{nrow}(z)\times 1} matrix; the effective
 #'    \code{gamma} used at each step (may be smaller than the supplied
 #'    \code{gamma} if retries reduced it). \code{NA} on failure.}
-#' 
+#'
 #' @details
 #' Given the evaluation matrix \code{z} of size \eqn{S\times p}, \code{X} and
 #' \code{y} are standardized (if requested) once, up front, and held fixed
@@ -99,28 +103,34 @@
 #'
 #' @examples
 #' set.seed(1)
-#' n <- 60; p <- 6; n_new <- 12
+#' n <- 60
+#' p <- 6
+#' n_new <- 12
 #' X <- matrix(rnorm(n * p), n, p)
 #' z <- matrix(rnorm(n_new * p), n_new, p)
 #' beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
 #' y <- as.numeric(X %*% beta + rnorm(n))
 #'
 #' # One prediction per step
-#' out1 <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
-#'                     gamma = 1, walk = 1)
-#' predict(out1)     # nrow(z) x 1 predictions
-#' coef(out1)        # nrow(z) x (1 + p) coefficient path
+#' out1 <- walk_capnet(X, y,
+#'   L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
+#'   gamma = 1, walk = 1
+#' )
+#' predict(out1) # nrow(z) x 1 predictions
+#' coef(out1) # nrow(z) x (1 + p) coefficient path
 #'
 #' # Batch 3 rows per step (useful for weekly or monthly evaluation)
-#' out3 <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
-#'                     gamma = 1, walk = 3)
-#' any(is.na(predict(out3)))  # check for convergence failures
-#' 
+#' out3 <- walk_capnet(X, y,
+#'   L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
+#'   gamma = 1, walk = 3
+#' )
+#' any(is.na(predict(out3))) # check for convergence failures
+#'
 #' @export
 
 walk_capnet <- function(X, y, L, z,
                         family = "gaussian",
-                        intercept = TRUE, 
+                        intercept = TRUE,
                         standardize = TRUE,
                         multiplier = 1,
                         walk = 1,
@@ -131,12 +141,11 @@ walk_capnet <- function(X, y, L, z,
                         parallel = FALSE,
                         workers = NULL,
                         ...) {
-  
   # Stop if there is any NA values in data
   if (anyNA(X) || anyNA(y) || anyNA(z)) {
     stop("X, y, or z contains NA values")
   }
-  
+
   spec <- .capnet_spec(
     X = X, y = y, L = L,
     family = family,
@@ -146,18 +155,18 @@ walk_capnet <- function(X, y, L, z,
     multiplier = multiplier,
     ...
   )
-  
+
   train <- .capnet_standardize_train(spec)
   m <- nrow(spec$z)
   p <- spec$p
-  
+
   intercepts <- numeric(m)
   predictions <- numeric(m)
   gamma_values <- numeric(m)
-  
+
   betas <- matrix(NA_real_, nrow = m, ncol = p)
   contributions <- matrix(NA_real_, nrow = m, ncol = p)
-  
+
   fitpoints <- unique(c(seq(1, m, by = walk), m + 1))
 
   # Each walk-forward step fits independently from the shared `train` object
@@ -185,7 +194,10 @@ walk_capnet <- function(X, y, L, z,
       # near-convergence stop (not divergence) and is common on problems with
       # highly collinear features; treat it as an acceptable fit rather than
       # retrying with a smaller gamma.
-      if (!is.null(fit_k) && (fit_k$convergence >= 0 || fit_k$convergence == -1001)) {
+      if (
+        !is.null(fit_k) &&
+          (fit_k$convergence >= 0 || fit_k$convergence == -1001)
+      ) {
         fit <- fit_k
         break
       }
@@ -195,7 +207,10 @@ walk_capnet <- function(X, y, L, z,
 
     if (is.null(fit)) {
       warning(sprintf(
-        "walk_capnet: failed to converge for cap slice [%d, %d]; storing NA outputs.",
+        paste0(
+          "walk_capnet: failed to converge for cap slice [%d, %d]; ",
+          "storing NA outputs."
+        ),
         start_row, end_row - 1L
       ))
       return(list(idx_cap = idx_cap, ok = FALSE))
@@ -233,7 +248,10 @@ walk_capnet <- function(X, y, L, z,
 
     intercepts[idx_cap] <- res$a0
     gamma_values[idx_cap] <- res$gamma
-    betas[idx_cap, ] <- matrix(rep(res$beta, res$m_i), nrow = res$m_i, byrow = TRUE)
+    betas[idx_cap, ] <- matrix(rep(res$beta, res$m_i),
+      nrow = res$m_i,
+      byrow = TRUE
+    )
     contributions[idx_cap, ] <- res$feature_contributions
     eta <- rowSums(res$feature_contributions) + res$a0
     predictions[idx_cap] <- train$family$linkinv(eta)
@@ -241,13 +259,13 @@ walk_capnet <- function(X, y, L, z,
 
   if (xts::is.xts(z)) {
     ord <- zoo::index(z)
-    
+
     intercepts <- xts::as.xts(intercepts, order.by = ord)
     betas <- xts::as.xts(betas, order.by = ord)
     contributions <- xts::as.xts(contributions, order.by = ord)
     predictions <- xts::as.xts(predictions, order.by = ord)
     gamma_values <- xts::as.xts(gamma_values, order.by = ord)
-    
+
     colnames(intercepts) <- "intercept"
     colnames(betas) <- colnames(contributions) <- colnames(X)
     colnames(predictions) <- "prediction"
@@ -256,13 +274,13 @@ walk_capnet <- function(X, y, L, z,
     intercepts <- matrix(intercepts, ncol = 1)
     predictions <- matrix(predictions, ncol = 1)
     gamma_values <- matrix(gamma_values, ncol = 1)
-    
+
     colnames(intercepts) <- "intercept"
     colnames(betas) <- colnames(contributions) <- colnames(X)
     colnames(predictions) <- "prediction"
     colnames(gamma_values) <- "gamma"
   }
-  
+
   structure(list(
     intercepts = intercepts,
     betas = betas,

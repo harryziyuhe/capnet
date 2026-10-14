@@ -14,12 +14,13 @@
 #'
 #' @examples
 #' set.seed(1)
-#' n <- 40; p <- 5
+#' n <- 40
+#' p <- 5
 #' X <- matrix(rnorm(n * p), n, p)
 #' y <- as.numeric(X %*% c(1, -1, 0.5, 0, 0) + rnorm(n))
 #' fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
-#' coef(fit)          # (1 + p) x 1 matrix
-#' coef(fit)[-1, ]    # slopes only
+#' coef(fit) # (1 + p) x 1 matrix
+#' coef(fit)[-1, ] # slopes only
 #'
 #' @export
 #' @method coef capnet
@@ -50,20 +51,22 @@ coef.capnet <- function(object, ...) {
 #'
 #' @examples
 #' set.seed(1)
-#' n <- 50; p <- 5; n_new <- 8
+#' n <- 50
+#' p <- 5
+#' n_new <- 8
 #' X <- matrix(rnorm(n * p), n, p)
 #' z <- matrix(rnorm(n_new * p), n_new, p)
 #' y <- as.numeric(X %*% c(1, -1, 0.5, 0, 0) + rnorm(n))
 #' fit <- walk_capnet(X, y, L = 1, z = z, lambda = 0.1, alpha = 0.5, gamma = 1)
-#' coef(fit)           # nrow(z) x (1 + p) path
-#' coef(fit, index = 1:3)  # first three steps only
+#' coef(fit) # nrow(z) x (1 + p) path
+#' coef(fit, index = 1:3) # first three steps only
 #'
 #' @export
 #' @method coef walk_capnet
 coef.walk_capnet <- function(object, index = NULL, ...) {
   coefs <- cbind(object$intercepts, object$betas)
   if (!is.null(index)) {
-    coefs <- coefs[index,]
+    coefs <- coefs[index, ]
   }
   coefs
 }
@@ -94,34 +97,42 @@ coef.walk_capnet <- function(object, index = NULL, ...) {
 #'
 #' @examples
 #' set.seed(1)
-#' n <- 40; p <- 5
+#' n <- 40
+#' p <- 5
 #' X <- matrix(rnorm(n * p), n, p)
 #' y <- as.numeric(X %*% c(1, -1, 0.5, 0, 0) + rnorm(n))
 #' fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
-#' predict(fit, type = "response")            # fitted values on training z
-#' predict(fit, newdata = X, type = "link")   # linear predictor on new data
+#' predict(fit, type = "response") # fitted values on training z
+#' predict(fit, newdata = X, type = "link") # linear predictor on new data
 #'
 #' @export
 #' @method predict capnet
-predict.capnet <- function(object, newdata  = NULL, type = c("link", "response"), ...) {
+predict.capnet <- function(
+  object,
+  newdata = NULL,
+  type = c("link", "response"),
+  ...
+) {
   type <- match.arg(type)
   if (is.null(newdata)) {
     newx <- object$z
   } else {
     newx <- as.matrix(newdata)
   }
-  
+
   if (is.null(object$beta) || is.null(object$a0)) {
     stop("capnet object missing coefficients.")
   }
   if (ncol(newx) != length(object$beta)) {
     stop("newdata must have ncol equal to length(coef slopes).")
   }
-  
+
   eta <- object$a0 + newx %*% object$beta
-  
-  if (type == "link") return(eta)
-  
+
+  if (type == "link") {
+    return(eta)
+  }
+
   family <- object$family
   if (is.character(family)) {
     family <- normalize_family(family)
@@ -129,7 +140,7 @@ predict.capnet <- function(object, newdata  = NULL, type = c("link", "response")
   if (is.null(family$linkinv)) {
     stop("Family object does not have linkinv().")
   }
-  
+
   mu <- family$linkinv(eta)
   mu
 }
@@ -149,7 +160,9 @@ predict.capnet <- function(object, newdata  = NULL, type = c("link", "response")
 #'
 #' @examples
 #' set.seed(1)
-#' n <- 50; p <- 5; n_new <- 8
+#' n <- 50
+#' p <- 5
+#' n_new <- 8
 #' X <- matrix(rnorm(n * p), n, p)
 #' z <- matrix(rnorm(n_new * p), n_new, p)
 #' y <- as.numeric(X %*% c(1, -1, 0.5, 0, 0) + rnorm(n))
@@ -164,11 +177,11 @@ predict.walk_capnet <- function(object, ...) {
 
 #' Plot cross-validation results for \code{cv_capnet}
 #'
-#' @param x An object of class \code{"cv_capnet"} returned by 
+#' @param x An object of class \code{"cv_capnet"} returned by
 #'  \code{cv_capnet()}.
-#' @param alpha Optional numeric; if provided, show CV errors vs \code{lambda} 
+#' @param alpha Optional numeric; if provided, show CV errors vs \code{lambda}
 #'  at this alpha.
-#' @param lambda Optional numeric; if provided, show CV errors vs \code{alpha} 
+#' @param lambda Optional numeric; if provided, show CV errors vs \code{alpha}
 #'  at this lambda.
 #' @param ... Further arguments passed to or from other methods.
 #'
@@ -193,63 +206,74 @@ predict.walk_capnet <- function(object, ...) {
 #'
 #' @examples
 #' \donttest{
-#'   set.seed(1)
-#'   n <- 80; p <- 10
-#'   X <- matrix(rnorm(n * p), n, p)
-#'   y <- as.numeric(X %*% c(rep(1, 3), rep(0, p - 3)) + rnorm(n))
-#'   cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
-#'   plot(cv)                        # full heatmap
-#'   plot(cv, alpha = cv$best_alpha) # error vs lambda slice
-#'   plot(cv, lambda = cv$best_lambda) # error vs alpha slice
+#' set.seed(1)
+#' n <- 80
+#' p <- 10
+#' X <- matrix(rnorm(n * p), n, p)
+#' y <- as.numeric(X %*% c(rep(1, 3), rep(0, p - 3)) + rnorm(n))
+#' cv <- cv_capnet(X, y, gamma = 1, L = 1.5)
+#' plot(cv) # full heatmap
+#' plot(cv, alpha = cv$best_alpha) # error vs lambda slice
+#' plot(cv, lambda = cv$best_lambda) # error vs alpha slice
 #' }
 #'
-#' @importFrom ggplot2 ggplot aes geom_tile labs theme_minimal scale_fill_viridis_c
-#' @importFrom ggplot2 stat_summary geom_vline mean_se
+#' @importFrom ggplot2 ggplot aes geom_tile labs theme_minimal
+#' @importFrom ggplot2 scale_fill_viridis_c stat_summary geom_vline mean_se
 #' @importFrom rlang .data
 #' @export
 #' @method plot cv_capnet
 plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
   object <- x
-  cv_errors  <- object$cv_errors        # A x L x K array
-  mean_errors <- object$mean_errors     # A x L matrix
-  alphas     <- object$alpha
-  lambdas    <- object$lambda
-  
+  cv_errors <- object$cv_errors # A x L x K array
+  mean_errors <- object$mean_errors # A x L matrix
+  alphas <- object$alpha
+  lambdas <- object$lambda
+
   dims <- dim(cv_errors)
-  A <- dims[1]; L <- dims[2]; K <- dims[3]
-  
+  A <- dims[1]
+  L <- dims[2]
+  K <- dims[3]
+
   if (is.null(alpha) && is.null(lambda)) {
     # heatmap of mean errors (ranked)
     df <- expand.grid(alpha = alphas, lambda = log10(lambdas))
     df$value <- as.vector(mean_errors)
     r <- rank(df$value, ties.method = "average")
     df$rank_scaled <- (r - min(r)) / (max(r) - min(r))
-    p <- ggplot(df, aes(x = .data$alpha, 
-                        y = .data$lambda, 
-                        fill = .data$rank_scaled)) +
+    p <- ggplot(df, aes(
+      x = .data$alpha,
+      y = .data$lambda,
+      fill = .data$rank_scaled
+    )) +
       geom_tile() +
       scale_fill_viridis_c() +
-      labs(title = "Ranked Mean CV Errors",
-           x = expression(alpha), y = expression(log[10](lambda)), fill = "Rank") +
+      labs(
+        title = "Ranked Mean CV Errors",
+        x = expression(alpha), y = expression(log[10](lambda)), fill = "Rank"
+      ) +
       theme_minimal()
     print(p)
     return(invisible(p))
   }
-  
+
   if (!is.null(alpha)) {
-    if (!(alpha %in% alphas)) stop("alpha value not evaluated during cross validation")
+    if (!(alpha %in% alphas)) {
+      stop(
+        "alpha value not evaluated during cross validation"
+      )
+    }
     ia <- which(alphas == alpha)
-    errs <- cv_errors[ia, , , drop = TRUE]  # L x K
+    errs <- cv_errors[ia, , , drop = TRUE] # L x K
     tot <- rowSums(errs)
     lambda.min <- lambdas[which.min(tot)]
     bar_width <- (log(max(lambdas)) - log(min(lambdas))) / (length(lambdas) - 1)
-    
+
     df <- data.frame(
       lambda = rep(log(lambdas), times = K),
       fold   = rep(seq_len(K), each = L),
       error  = as.vector(errs)
     )
-    
+
     p <- ggplot(df, aes(x = .data$lambda, y = .data$error)) +
       stat_summary(fun.data = mean_se, geom = "errorbar", width = bar_width) +
       stat_summary(fun = mean, geom = "point", size = 2) +
@@ -262,23 +286,29 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
     print(p)
     return(invisible(p))
   }
-  
+
   if (!is.null(lambda)) {
-    if (!(lambda %in% lambdas)) stop("lambda value not evaluated during cross validation")
+    if (!(lambda %in% lambdas)) {
+      stop(
+        "lambda value not evaluated during cross validation"
+      )
+    }
     il <- which(lambdas == lambda)
-    errs <- cv_errors[, il, , drop = TRUE]  # A x K
+    errs <- cv_errors[, il, , drop = TRUE] # A x K
     tot <- rowSums(errs)
     alpha.min <- alphas[which.min(tot)]
     bar_width <- (max(alphas) - min(alphas)) / (length(alphas) - 1)
-    
+
     df <- data.frame(
       alpha = rep(alphas, times = K),
       fold  = rep(seq_len(K), each = A),
       error = as.vector(errs)
     )
-    
-    p <- ggplot(df, aes(x = .data$alpha, 
-                        y = .data$error)) +
+
+    p <- ggplot(df, aes(
+      x = .data$alpha,
+      y = .data$error
+    )) +
       stat_summary(fun.data = mean_se, geom = "errorbar", width = bar_width) +
       stat_summary(fun = mean, geom = "point", size = 2) +
       geom_vline(xintercept = alpha.min, linetype = 2) +
@@ -290,7 +320,7 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
     print(p)
     return(invisible(p))
   }
-  
+
   invisible(object)
 }
 
@@ -313,15 +343,19 @@ plot.cv_capnet <- function(x, alpha = NULL, lambda = NULL, ...) {
 #'
 #' @examples
 #' set.seed(1)
-#' n <- 50; p <- 6
+#' n <- 50
+#' p <- 6
 #' X <- matrix(rnorm(n * p), n, p)
 #' colnames(X) <- paste0("x", seq_len(p))
 #' y <- as.numeric(X %*% c(1.5, -1, 0.5, 0, 0, 0) + rnorm(n))
-#' path <- coef_path(X, y, L = 0.5, alpha = 0.5,
-#'                   lambda = exp(seq(1, -5, length.out = 30)), gamma = 1)
+#' path <- coef_path(X, y,
+#'   L = 0.5, alpha = 0.5,
+#'   lambda = exp(seq(1, -5, length.out = 30)), gamma = 1
+#' )
 #' plot(path)
 #'
-#' @importFrom ggplot2 ggplot aes geom_line labs theme_minimal theme_bw theme element_text
+#' @importFrom ggplot2 ggplot aes geom_line labs theme_minimal theme_bw theme
+#' @importFrom ggplot2 element_text
 #' @importFrom rlang .data
 #' @export
 #' @method plot capnet_path
@@ -332,13 +366,15 @@ plot.capnet_path <- function(x, ...) {
   n <- nrow(object)
   feat_names <- names(object)[-1]
   df_long <- data.frame(
-    param  = rep(object[[1]], times = length(feat_names)),
+    param = rep(object[[1]], times = length(feat_names)),
     feature = rep(feat_names, each = n),
-    coef   = as.vector(as.matrix(object[-1]))
+    coef = as.vector(as.matrix(object[-1]))
   )
-  p <- ggplot(df_long, aes(x = .data$param, 
-                           y = .data$coef, 
-                           color = .data$feature)) +
+  p <- ggplot(df_long, aes(
+    x = .data$param,
+    y = .data$coef,
+    color = .data$feature
+  )) +
     geom_line(linewidth = 0.8) +
     labs(x = param_name, y = "Coefficient") +
     theme_bw() +
@@ -364,13 +400,14 @@ plot.capnet_path <- function(x, ...) {
 #'
 #' @examples
 #' set.seed(1)
-#' n <- 40; p <- 5
+#' n <- 40
+#' p <- 5
 #' X <- matrix(rnorm(n * p), n, p)
 #' y <- as.numeric(X %*% c(2, -1.5, 0, 0, 0) + rnorm(n))
 #' fit <- capnet(X, y, lambda = 0.05, alpha = 0.5, gamma = 0.1, L = 0.5)
 #' v <- capnet_violations(fit)
-#' if (!is.null(v)) print(v)         # sparse display of excess contributions
-#' if (!is.null(v)) v$excess[1:5, ]  # raw access
+#' if (!is.null(v)) print(v) # sparse display of excess contributions
+#' if (!is.null(v)) v$excess[1:5, ] # raw access
 #'
 #' @seealso [capnet_violations()], [capnet()]
 #'
@@ -379,40 +416,20 @@ plot.capnet_path <- function(x, ...) {
 #' @method print capnet_violations
 print.capnet_violations <- function(x, ...) {
   sparse_x <- Matrix(x$excess, sparse = TRUE)
-  
+
   # Default arguments
   defaults <- list(
     col.names = TRUE,
     align     = "right",
     digits    = 4
   )
-  
+
   # Capture user arguments
   user_args <- list(...)
-  
+
   # Let user override defaults
   defaults[names(user_args)] <- user_args
-  
+
   # Call printSpMatrix safely
   do.call(printSpMatrix, c(list(x = sparse_x), defaults))
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

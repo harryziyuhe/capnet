@@ -45,7 +45,8 @@ matrices will also be \code{xts} with the same index.}
 \item{intercept}{Logical; should an intercept be fitted? Default \code{TRUE}.}
 
 \item{standardize}{Logical; if \code{TRUE}, columns of \code{X} and \code{y}
-are standardized for fitting; coefficients are returned on the original scale.
+are standardized for fitting; coefficients are returned on the original
+scale.
 Default \code{TRUE}.}
 
 \item{multiplier}{Optional numeric scalar or length-\eqn{n} vector used to
@@ -58,12 +59,14 @@ are used to enforce the cap and generate predictions together. If
 \code{nrow(z)} is not evenly divisible by \code{walk}, the last step
 covers the remaining rows. Default \code{1} (one row per step).}
 
-\item{lambda}{Nonnegative numeric scalar; overall strength of the elastic net penalty.}
+\item{lambda}{Nonnegative numeric scalar; overall strength of the elastic net
+penalty.}
 
 \item{alpha}{Numeric scalar in \eqn{[0,1]}; elastic net mixing parameter.
 \code{alpha = 1} is Lasso, \code{alpha=0} is Ridge.}
 
-\item{gamma}{Nonnegative numeric scalar; strength of the contribution-cap penalty.}
+\item{gamma}{Nonnegative numeric scalar; strength of the contribution-cap
+penalty.}
 
 \item{max_gamma_tries}{Positive integer; maximum number of optimizer retries
 per step with a reduced \code{gamma}. If the optimizer fails to converge
@@ -79,10 +82,11 @@ not change results. Default \code{FALSE}.}
 
 \item{workers}{Optional integer; number of parallel workers to use when
 \code{parallel = TRUE}. Defaults to \code{min(n_steps, detectCores() - 1,
-90)}: capped at the number of walk steps (idle workers add no value) and
+ 90)}: capped at the number of walk steps (idle workers add no value) and
 at 90 to avoid exhausting R's 128-connection limit.}
 
-\item{...}{Additional arguments used in fitting. See \code{\link[=capnet]{capnet()}} for more details.}
+\item{...}{Additional arguments used in fitting. See \code{\link[=capnet]{capnet()}} for more
+details.}
 }
 \value{
 An object of class \code{"walk_capnet"} with components (each of
@@ -134,22 +138,28 @@ simultaneously.
 }
 \examples{
 set.seed(1)
-n <- 60; p <- 6; n_new <- 12
+n <- 60
+p <- 6
+n_new <- 12
 X <- matrix(rnorm(n * p), n, p)
 z <- matrix(rnorm(n_new * p), n_new, p)
 beta <- c(2.5, 1.5, 0.8, rep(0, p - 3))
 y <- as.numeric(X \%*\% beta + rnorm(n))
 
 # One prediction per step
-out1 <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
-                    gamma = 1, walk = 1)
-predict(out1)     # nrow(z) x 1 predictions
-coef(out1)        # nrow(z) x (1 + p) coefficient path
+out1 <- walk_capnet(X, y,
+  L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
+  gamma = 1, walk = 1
+)
+predict(out1) # nrow(z) x 1 predictions
+coef(out1) # nrow(z) x (1 + p) coefficient path
 
 # Batch 3 rows per step (useful for weekly or monthly evaluation)
-out3 <- walk_capnet(X, y, L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
-                    gamma = 1, walk = 3)
-any(is.na(predict(out3)))  # check for convergence failures
+out3 <- walk_capnet(X, y,
+  L = 0.5, z = z, lambda = 0.1, alpha = 0.5,
+  gamma = 1, walk = 3
+)
+any(is.na(predict(out3))) # check for convergence failures
 
 }
 \seealso{

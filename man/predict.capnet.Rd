@@ -36,12 +36,13 @@ inspecting fitted contributions without re-specifying the data. When
 }
 \examples{
 set.seed(1)
-n <- 40; p <- 5
+n <- 40
+p <- 5
 X <- matrix(rnorm(n * p), n, p)
 y <- as.numeric(X \%*\% c(1, -1, 0.5, 0, 0) + rnorm(n))
 fit <- capnet(X, y, lambda = 0.1, alpha = 0.5, gamma = 1, L = 1)
-predict(fit, type = "response")            # fitted values on training z
-predict(fit, newdata = X, type = "link")   # linear predictor on new data
+predict(fit, type = "response") # fitted values on training z
+predict(fit, newdata = X, type = "link") # linear predictor on new data
 
 }
 \seealso{

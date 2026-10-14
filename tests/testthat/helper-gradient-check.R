@@ -6,7 +6,6 @@
   family <- normalize_family(family)
 
   ll <- make_likelihood(family, X, y)
-  n <- nrow(X)
   p <- ncol(X)
 
   if (is.null(betas)) {
@@ -54,7 +53,10 @@
   beta_0 <- betas[1]
   beta <- betas[-1]
 
-  b0_loss <- (obj$loss(c(beta_0 + eps, beta)) - obj$loss(c(beta_0 - eps, beta))) / (2 * eps)
+  b0_loss <- (obj$loss(c(beta_0 + eps, beta)) - obj$loss(c(
+    beta_0 - eps,
+    beta
+  ))) / (2 * eps)
   b0_grad <- obj$gradient(betas)[1]
   intercept_diff <- abs(b0_loss - b0_grad)
 
@@ -63,7 +65,10 @@
     beta_up <- beta_down <- beta
     beta_up[i] <- beta_up[i] + eps
     beta_down[i] <- beta_down[i] - eps
-    beta_loss <- (obj$loss(c(beta_0, beta_up)) - obj$loss(c(beta_0, beta_down))) / (2 * eps)
+    beta_loss <- (obj$loss(c(beta_0, beta_up)) - obj$loss(c(
+      beta_0,
+      beta_down
+    ))) / (2 * eps)
     beta_grad <- obj$gradient(betas)[i + 1L]
     coef_diffs[i] <- abs(beta_loss - beta_grad)
   }

@@ -1,10 +1,14 @@
 #' Generate synthetic data for testing \code{capnet}
 #'
 #' Creates synthetic regression data for two scenarios with a unified return
-#' format. In both cases the function returns \code{X}, \code{y}, the ground-truth
-#' coefficients \code{beta_true}, and suggested caps \code{L}. When \code{m > 0},
-#' an evaluation matrix \code{Z} of \code{m} rows is also returned, generated from
-#' the same data-generating process and ready to pass as the \code{z} argument of
+#' format. In both cases the function returns \code{X}, \code{y}, the
+#' ground-truth
+#' coefficients \code{beta_true}, and suggested caps \code{L}. When \code{m >
+#' 0},
+#' an evaluation matrix \code{Z} of \code{m} rows is also returned, generated
+#'  from
+#' the same data-generating process and ready to pass as the \code{z} argument
+#'  of
 #' \code{capnet()} or \code{walk_capnet()}.
 #'
 #' @importFrom stats rnorm runif rbinom cor rpois rgamma qlogis plogis sd
@@ -12,12 +16,14 @@
 #' @param n Integer; number of training observations. Default \code{100}.
 #' @param p Integer; number of predictors. Default \code{20}.
 #' @param m Integer; number of evaluation rows to generate. When \code{m > 0}
-#'   the function returns a \code{Z} matrix of \code{m} rows drawn from the same
+#' the function returns a \code{Z} matrix of \code{m} rows drawn from the same
 #'   DGP as \code{X}. Default \code{0} (no evaluation set returned).
-#' @param mode Character; one of \code{"basic"} or \code{"proxy"}. Default \code{"basic"}.
+#' @param mode Character; one of \code{"basic"} or \code{"proxy"}. Default
+#'  \code{"basic"}.
 #' @param sparsity Numeric in \eqn{[0,1]}; fraction of nonzero coefficients
 #'   in \code{beta_true}. Default \code{0.7}
-#' @param beta_range Numeric length-2; uniform range for nonzero \code{beta_true}
+#' @param beta_range Numeric length-2; uniform range for nonzero
+#'  \code{beta_true}
 #'   entries. Default \code{c(-2, 2)}.
 #' @param sigma Positive numeric; noise sd for \code{y}. Only used when
 #'   \code{family = "gaussian"}. Default \code{1}.
@@ -27,15 +33,18 @@
 #' These arguments control the generation of unstable proxy features when
 #' simulating data under \code{mode = "proxy"}.
 #'
-#' @param xstar_sd Positive numeric; sd of latent true signal \eqn{X^*}. Default \code{1}.
-#' @param a_sd Nonnegative numeric; sd of log-scales \code{a_j = exp(N(0, a_sd^2))}.
+#' @param xstar_sd Positive numeric; sd of latent true signal \eqn{X^*}. Default
+#'  \code{1}.
+#' @param a_sd Nonnegative numeric; sd of log-scales \code{a_j = exp(N(0,
+#'  a_sd^2))}.
 #'   Default \code{0.3}.
 #' @param unstable_idx Optional integer vector of columns of \code{X} with
 #'   unstable variance. If \code{NULL}, \code{round(unstable_frac * p)} columns
 #'   are sampled at random.
 #' @param unstable_frac Numeric in \eqn{[0,1]}; fraction of features to label
 #'   unstable when \code{unstable_idx} is \code{NULL}. Default \code{0.25}.
-#' @param sigma_low Positive numeric; base noise sd for \code{X}. Default \code{1}.
+#' @param sigma_low Positive numeric; base noise sd for \code{X}. Default
+#'  \code{1}.
 #' @param sigma_high Positive numeric; intermittent high noise sd for unstable
 #'   features. Default \code{8}.
 #' @param high_prob Numeric in \eqn{[0,1]}; per-row probability an unstable
@@ -103,50 +112,61 @@
 #' @examples
 #' set.seed(42)
 #' d_basic <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5)
-#' names(d_basic)  # includes Z
+#' names(d_basic) # includes Z
 #'
-#' d_pois <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
-#'                                 family = "poisson", poisson_mean = 15)
+#' d_pois <- simulate_capnet_data(
+#'   n = 100, p = 10, m = 20, sparsity = 0.5,
+#'   family = "poisson", poisson_mean = 15
+#' )
 #' range(d_pois$y)
 #'
-#' d_binom <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
-#'                                  family = "binomial", binomial_prob = 0.3)
+#' d_binom <- simulate_capnet_data(
+#'   n = 100, p = 10, m = 20, sparsity = 0.5,
+#'   family = "binomial", binomial_prob = 0.3
+#' )
 #' table(d_binom$y)
 #'
-#' d_gamma <- simulate_capnet_data(n = 100, p = 10, m = 20, sparsity = 0.5,
-#'                                  family = "gamma", gamma_mean = 5)
+#' d_gamma <- simulate_capnet_data(
+#'   n = 100, p = 10, m = 20, sparsity = 0.5,
+#'   family = "gamma", gamma_mean = 5
+#' )
 #' range(d_gamma$y)
 #'
-#' d_proxy <- simulate_capnet_data(mode = "proxy", n = 300, p = 8, m = 50,
-#'                                 sparsity = 0.6, unstable_frac = 0.25,
-#'                                 sigma_low = 1, sigma_high = 6, high_prob = 0.2)
-#' names(d_proxy)  # includes Z and X_latent
+#' d_proxy <- simulate_capnet_data(
+#'   mode = "proxy", n = 300, p = 8, m = 50,
+#'   sparsity = 0.6, unstable_frac = 0.25,
+#'   sigma_low = 1, sigma_high = 6, high_prob = 0.2
+#' )
+#' names(d_proxy) # includes Z and X_latent
 #'
 #' @export
 simulate_capnet_data <- function(
-    n = 100, p = 20, m = 0,
-    mode = c("basic", "proxy"),
-    sparsity = 0.7,
-    beta_range = c(-2, 2),
-    sigma = 1,
-    seed = NULL,
-    xstar_sd = 1,
-    a_sd = 0.3,
-    unstable_idx = NULL,
-    unstable_frac = 0.2,
-    sigma_low = 1.0,
-    sigma_high = 8.0,
-    high_prob = 0.1,
-    family = c("gaussian", "binomial", "poisson", "gamma"),
-    poisson_mean = 10,
-    gamma_mean = 10,
-    gamma_shape = 2,
-    binomial_prob = 0.5
+  n = 100, p = 20, m = 0,
+  mode = c("basic", "proxy"),
+  sparsity = 0.7,
+  beta_range = c(-2, 2),
+  sigma = 1,
+  seed = NULL,
+  xstar_sd = 1,
+  a_sd = 0.3,
+  unstable_idx = NULL,
+  unstable_frac = 0.2,
+  sigma_low = 1.0,
+  sigma_high = 8.0,
+  high_prob = 0.1,
+  family = c("gaussian", "binomial", "poisson", "gamma"),
+  poisson_mean = 10,
+  gamma_mean = 10,
+  gamma_shape = 2,
+  binomial_prob = 0.5
 ) {
   mode <- match.arg(mode)
   family <- match.arg(family)
   if (family != "gaussian" && mode == "proxy") {
-    stop(sprintf("family = \"%s\" is only supported in mode = \"basic\".", family))
+    stop(sprintf(
+      "family = \"%s\" is only supported in mode = \"basic\".",
+      family
+    ))
   }
   if (!is.null(seed)) set.seed(seed)
 
@@ -184,8 +204,11 @@ simulate_capnet_data <- function(
       eta <- eta_slope + (target_eta0 - mean(eta_slope))
 
       y <- switch(family,
-        poisson  = rpois(n, exp(eta)),
-        gamma    = rgamma(n, shape = gamma_shape, rate = gamma_shape / exp(eta)),
+        poisson = rpois(n, exp(eta)),
+        gamma = rgamma(n,
+          shape = gamma_shape,
+          rate = gamma_shape / exp(eta)
+        ),
         binomial = rbinom(n, size = 1, prob = plogis(eta))
       )
     }
@@ -222,17 +245,21 @@ simulate_capnet_data <- function(
     mean_part <- sweep(X_star_rows, 2, a, "*")
     Eta <- matrix(rnorm(nr * p, sd = sigma_low), nr, p)
     if (length(unstable_idx) > 0) {
-      flips <- matrix(rbinom(nr * length(unstable_idx), 1, high_prob),
-                      nr, length(unstable_idx))
+      flips <- matrix(
+        rbinom(nr * length(unstable_idx), 1, high_prob),
+        nr, length(unstable_idx)
+      )
       sd_mat <- sigma_low + flips * (sigma_high - sigma_low)
-      Eta[, unstable_idx] <- matrix(rnorm(nr * length(unstable_idx)),
-                                    nr, length(unstable_idx)) * sd_mat
+      Eta[, unstable_idx] <- matrix(
+        rnorm(nr * length(unstable_idx)),
+        nr, length(unstable_idx)
+      ) * sd_mat
     }
     mean_part + Eta
   }
 
   X <- .make_proxy(X_latent)
-  colnames(X)        <- paste0("X", seq_len(p))
+  colnames(X) <- paste0("X", seq_len(p))
   colnames(X_latent) <- paste0("X", seq_len(p))
 
   L <- pmax(abs(cor(X, y) * 5), 0.1)
