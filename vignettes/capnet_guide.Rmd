@@ -51,7 +51,7 @@ This formulation resembles generalized LASSO-type problems [@tibshirani_solution
 
 The contribution cap penalty renders off-the-shelf solvers like `glmnet` unsuitable. Instead, `capnet` uses:
 
-- **OWL-QN (Orthant-Wise Limited-memory Quasi-Newton)**: when $\lambda\alpha > 0$, OWL-QN handles the $\ell_1$ term by enforcing an orthant constraint at each step (coefficients cannot cross zero within a single iteration), preserving L-BFGS efficiency while accounting for the subgradient structure of $\|\beta\|_1$.
+- **OWL-QN (Orthant-Wise Limited-memory Quasi-Newton)**: when $\lambda\alpha > 0$, OWL-QN handles the $\ell_1$ term by enforcing an orthant constraint at each step (coefficients cannot cross zero within a single iteration), preserving L-BFGS efficiency while accounting for the subgradient structure of $\|\beta\|_1$ [@andrew_lbfgs_2007].
 - **L-BFGS**: when $\alpha=0$ (ridge) or $\lambda=0$ (no elastic net penalty), the $\ell_1$ term vanishes and the solver falls back to standard L-BFGS.
 
 Both solvers are provided by the `lbfgs` package. The internal optimizer selection is automatic: `orthantwise_c = lambda * alpha` is passed to `lbfgs()`, which switches to OWL-QN whenever this is positive.
