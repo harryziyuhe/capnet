@@ -13,8 +13,6 @@
 ^UPDATE_LOG\.md$
 ^\.claude$
 ^CLAUDE\.md$
-^capnet_hex\.png$
-^capnet\.png$
 ^\.latexmkrc$
 ^vignettes/drafts/
 ^vignettes/paper/
