@@ -2,12 +2,13 @@ Package: capnet
 Type: Package
 Title: Contribution-Capped Elastic Net Regularization
 Version: 0.4.0
-Date: 2026-09-21
+Date: 2026-10-15
 Authors@R: person("Harry", "He", email = "zih028@ucsd.edu", role = c("aut", "cre", "cph"))
 Copyright: 2026 Harry He
 Description: Implements contribution-capped regularization to directly bound
-    per-feature contributions in predictive models. Includes Orthant-Wise Limited-memory 
-    Quasi Newton (OWL-QN) optimization, cross-validation, walk-forward fitting and 
+    per-feature contributions in predictive models. Includes quasi-Newton
+    optimization for unbounded fits and projected proximal gradient for finite
+    coefficient bounds, as well as cross-validation, walk-forward fitting and
     prediction, and plotting utilities.
 URL: https://github.com/harryziyuhe/capnet
 BugReports: https://github.com/harryziyuhe/capnet/issues
