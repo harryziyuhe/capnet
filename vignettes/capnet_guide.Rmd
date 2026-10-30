@@ -24,7 +24,6 @@ library(xts)
 library(capnet)
 if (glmnet_ok) library(glmnet)
 if (xtable_ok) library(xtable)
-options(scipen = 0)
 convergence.table <- NULL
 ```
 
