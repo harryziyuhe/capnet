@@ -1,3 +1,7 @@
+# capnet 0.4.1
+* Added method references to `DESCRIPTION` and removed an unnecessary global
+  `scipen` option change from the guide vignette in response to CRAN review.
+
 # capnet 0.4.0
 * Reworked fitting with finite coefficient bounds to use projected proximal
   gradient, enforcing the bounds throughout optimization and supporting the L1
