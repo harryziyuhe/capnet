@@ -29,11 +29,11 @@
 \Shorttitle{\pkg{capnet}: Contribution-Capped Regularization}
 
 \Abstract{
-    \pkg{capnet} is an \proglang{R} package that extends elastic net regression by introducing a contribution-capped regularization framework for controlling covariate influence and improving stability in generalized linear models. Motivated by tactical asset allocation problems where single feature dominance can lead to undesirable concentration risk, \pkg{capnet} allows users to specify feature-specific contribution ceilings and achieves more stable predictions especially in the presence of heavy-tailed covariates. Similar applications arise in risk management, credit scoring, and epidemiology, where extreme covariate realizations can induce large covariate contributions. This paper presents the statistical formulation of contribution caps, their integration with GLMs, and the optimization algorithm used for estimation. We demonstrate the utility of \pkg{capnet} through simulation studies and real-world case studies in two distinct domains---a quantitative finance market-timing application under a Gaussian model, and a web-traffic forecasting application under a Poisson model---showing that contribution-capped models can outperform classical approaches and alternative methods in both settings.
+    \pkg{capnet} is an \proglang{R} package for generalized linear models (GLMs) with contribution-capped regularization. The method supplements the elastic net with a penalty on feature contributions that exceed user-specified ceilings. An evaluation matrix, which may differ from the training design matrix, identifies the covariate realizations on which these contributions are assessed. This formulation addresses settings in which extreme covariate values can dominate predictions despite coefficient shrinkage. We derive the penalty and its gradient, describe estimation and sequential prediction workflows, and illustrate the method in a simulation, a Gaussian market-timing application, and a Poisson web-traffic forecasting application. In these examples, contribution penalties can improve out-of-sample performance relative to uncapped and post-fit capped models. More broadly, the paper provides a worked recipe for incorporating application-specific penalties into regression: define the behavior to be discouraged, express it as a penalty, and integrate that penalty into estimation.
 }
 
-\Keywords{regularization, constrained optimization, elastic net, R}
-\Plainkeywords{regularization, constrained optimization, elastic net, R}
+\Keywords{regularization, penalized regression, elastic net, R}
+\Plainkeywords{regularization, penalized regression, elastic net, R}
 
 \Address{
   Harry He\\
@@ -48,295 +48,199 @@
 
 \section{Introduction}
 
-In many predictive applications, model behavior is driven not only by coefficient magnitude but also by the realized contribution of each feature to the linear predictor. When covariates take extreme values, a small number of features can dominate the linear predictor, producing unstable predictions, excessive sensitivity to rare events, or violations of domain-specific constraints. This issue is especially pronounced when covariates are heavy-tailed or when models are deployed in stress scenarios or out-of-sample settings where tail-region observations are substantively important. Classical penalization methods such as ridge regression \citep{hoerl1970}, the lasso \citep{tibshirani1996}, and the elastic net \citep{zou2005} control model complexity by shrinking coefficients, but they do not directly regulate realized feature contributions. Robust regression techniques, alternative response distributions, and transformations address instability arising from extreme observations or residual behavior in different ways, but they do not provide explicit control over how individual features enter the linear predictor.
+In many predictive applications, model behavior depends on both coefficient magnitude and the realized contribution of each feature to the linear predictor. Extreme covariate values can allow a few features to dominate predictions, creating sensitivity to rare events or conflicting with preferences about how much a prediction should depend on any one signal. This issue is especially salient when covariates are skewed or heavy-tailed, or when models are evaluated in stress scenarios that are poorly represented in the training sample. Classical penalties such as ridge regression \citep{hoerl1970}, the lasso \citep{tibshirani1996}, and the elastic net \citep{zou2005} shrink coefficients, but they do not directly target the contributions realized at particular covariate values. Robust regression, response-distribution choices, and transformations address other sources of instability; their usual formulations do not specify how large an individual feature's contribution may be.
 
-This issue is particularly salient in quantitative finance applications, where covariates often exhibit heavy-tailed behavior and extreme realizations are central to model evaluation. In such settings, tail-region observations can induce abrupt spikes in feature contributions, leading to concentration risk and unstable downstream decisions. Similar challenges arise in risk management, credit scoring, epidemiology, web and network traffic forecasting, and related fields, where covariates may display skewed or heavy-tailed distributions and predictions are often evaluated under stress scenarios rather than average conditions.
+Quantitative finance provides one motivation. A return forecast may feed a position-sizing rule, so a tail observation in one predictor can make a downstream decision unusually dependent on that signal. Risk managers can impose position limits or exposure budgets, but it can also be useful to discourage signal dominance while estimating the forecasting model. Related concerns arise in credit scoring, epidemiology, and web or network traffic forecasting, where unusual covariate values may appear at prediction time and where the cost of an extreme forecast can differ from the cost of an ordinary error. The appropriate ceiling is application-specific: an extreme contribution may be useful information in one setting and an unwanted sensitivity in another.
 
-This paper introduces \pkg{capnet}, a penalized regression framework and accompanying \proglang{R} package that directly constrains realized feature contributions. \pkg{capnet} extends the elastic net by placing feature-specific limits on the magnitude of \(X_{ij}\beta_j\), providing a direct mechanism for controlling instability and concentration of predictive weight in the linear predictor. A key feature of the framework is the ability to specify an evaluation matrix distinct from the training data, allowing contribution constraints to be enforced not only in-sample but also on stress scenarios, held-out observations, or anticipated deployment environments. This formulation integrates naturally with generalized linear models and can be efficiently estimated using standard optimization techniques.
+This paper introduces \pkg{capnet}, a penalized regression framework and accompanying \proglang{R} package that supplements the elastic net with a penalty on large feature contributions. The elastic net combines the sparsity-inducing $\ell_1$ penalty with the $\ell_2$ penalty used in ridge regression \citep{zou2005}. Contribution caps add a separate target: the magnitude of $Z_{ij}\beta_j$, the contribution of feature $j$ at evaluation covariate row $i$. The evaluation matrix $Z$ may differ from the training design matrix. It can represent training observations, specified stress scenarios, or covariate values available when a forecast is made. A finite penalty makes ceilings soft rather than guaranteed bounds; the goal is to let estimation balance predictive fit against the cost of excessive contributions in the selected evaluation environment.
 
-The contribution-cap formulation integrates naturally with generalized linear models and yields a convex optimization problem that can be efficiently solved using quasi-Newton methods. The \pkg{capnet} package provides a practical and extensible implementation, including functionality for model fitting, cross-validation, and sequential (walk-forward) estimation, with an interface designed to align with established tools for penalized regression.
+The formulation applies to generalized linear models (GLMs), where contributions enter the linear predictor but have different interpretations under different links. A contribution is additive for a Gaussian identity-link mean, whereas it changes log-odds in a logistic model or the log-mean in a Poisson model. The supported losses and contribution penalty yield a convex objective. The \pkg{capnet} package provides model fitting, cross-validation, contribution diagnostics, and sequential estimation, using quasi-Newton methods for unconstrained coefficient fits and a projected solver when coefficient bounds are supplied.
 
-The primary contribution of this work is both conceptual and computational. \pkg{capnet} introduces a new dimension of regularization by shifting the focus from controlling parameter magnitude to controlling feature-level influence. By embedding contribution control directly into the estimation procedure, the framework aligns statistical modeling with practical constraints on feature behavior in applications where stability, robustness, and interpretability are of central importance.
+The contribution is conceptual as well as computational. Coefficient regularization controls parameter magnitude, while contribution regularization evaluates how the fitted coefficients behave at specified covariate values. Estimating with the contribution penalty can change several coefficients at once; clipping contributions after fitting cannot make that adjustment. We illustrate this distinction with a repeated simulation and two empirical applications. These examples examine prediction error and feature contributions, not universal robustness guarantees or the outcome of a specified portfolio strategy. The paper also serves as a worked recipe for expressing an application-specific modeling preference as a penalty and checking its empirical trade-off; other penalties would require their own derivations and validation.
 
-The remainder of this article is organized as follows. Section~\ref{sec:motivate} discusses the practical motivations underlying contribution caps and reviews related approaches for handling heavy-tailed covariates. Section~\ref{sec:framework} presents the contribution-cap framework and its integration with generalized linear models. Section~\ref{sec:software} describes the software implementation and optimization strategy used in the \pkg{capnet} package. Section~\ref{sec:examples} provides empirical examples illustrating the use of \pkg{capnet} in Gaussian and other GLM settings. Section~\ref{sec:conclusion} concludes with a discussion of limitations and directions for future research.
+The remainder of this article is organized as follows. Section~\ref{sec:motivate} motivates contribution control and reviews related methods. Section~\ref{sec:framework} defines the objective and optimization procedure. Section~\ref{sec:software} presents the software interface and optimization strategy used in the \pkg{capnet} package. Section~\ref{sec:examples} reports the finance and web-traffic applications. Section~\ref{sec:conclusion} concludes with a discussion of limitations and directions for future research.
 
 \section{Motivations}\label{sec:motivate}
 
-\subsection{Theoretical Motivations}
+\subsection{Why Control Feature COntributions?}
+
 Contribution caps are motivated by predictive settings in which a small number of features can exert disproportionate influence on fitted values, particularly when observations fall in the tails of the covariate distribution. These tail-region observations may be rare but substantively important, and they can induce unstable predictions when individual feature contributions become large. Consider a predictive task governed by the data-generating process where covariates $X_1, \ldots, X_p$ jointly determine the response $Y$.
 
-Ordinary least squares (OLS) yields the best linear unbiased estimator (BLUE) in an idealized setting $X \in \mathbb{R}^{n \times p}$ is fully observed, $n \gg p$, the functional form is linear and additive, and classical assumptions hold. In that case, no penalization is required. In practice, deviations from this setting—such as multicollinearity, high-dimensionality, or model misspecification—motivate the use of $\ell_1$ and $\ell_2$ regularization to stabilize estimation.
+Under the classical linear-model assumptions, including a full-rank design and exogenous, uncorrelated errors with constant variance, ordinary least squares (OLS) is the best linear unbiased estimator. Penalization is not required for that result, and a large realized contribution may represent genuine signal. In practice, multicollinearity, high-dimensionality, or model misspecification can motivate $\ell_1$ and $\ell_2$ regularization to stabilize estimation. The contribution penalty addresses a further, application-specific concern about model behavior at selected covariate values.
 
-% \begin{figure}[H]
-%     \centering
-%     \begin{tikzpicture}[
-%         node distance=1.5cm and 1.2cm,
-%         every node/.style={draw, circle, minimum size=8mm}
-%     ]
+In many applications, covariates are skewed or exhibit unusually frequent extremes, so prediction may encounter observations in the tails of their distributions. These observations can be rare in the training data yet substantively important, generating abrupt spikes in realized feature contributions. Examples include periods of market stress in finance, extreme environmental conditions in climate modeling, and rare risk profiles in insurance or credit scoring. An extreme covariate realization can induce a large contribution $X_{ij}\beta_j$ even when its coefficient has been shrunk. A model may therefore appear well behaved on typical training rows but produce a prediction dominated by one feature on an evaluation row. Traditional coefficient regularization reduces this risk indirectly; it does not target a specified contribution ceiling for that row.
 
-%         % X nodes (you can change p as needed)
-%         \node (x1) {$X_1$};
-%         \node (x2) [right=of x1] {$X_2$};
-%         \node (x3) [right=of x2] {$X_3$};
-%         \node (xdots) [right=of x3, draw=none] {$\cdots$};
-%         \node (xp) [right=of xdots] {$X_p$};
+A substantial literature on fat-tailed data addresses related issues by modeling unusual response distributions. Approaches include response transformations, Gamma or inverse Gaussian models for positive responses, quantile regression, mixtures, and spliced distributions \citep{shi2014,gan2018}. These methods can improve modeling of the conditional distribution of $Y$. Their usual formulations do not specify a ceiling for an individual feature's contribution to the linear predictor, so a response-model choice alone need not prevent a large covariate realization from dominating a fitted value.
 
-%         % Y node
-%         \node (y) [below=1.8cm of x3] {$Y$};
-
-%         % Edges from all X's to Y
-%         \draw[-{Latex[length=2mm]}, shorten >=2pt] (x1) -- (y);
-%         \draw[-{Latex[length=2mm]}, shorten >=2pt] (x2) -- (y);
-%         \draw[-{Latex[length=2mm]}, shorten >=2pt] (x3) -- (y);
-%         \draw[-{Latex[length=2mm]}, shorten >=2pt] (xp) -- (y);
-
-%     \end{tikzpicture}
-%     \caption{Directed Acyclic Graph for Data Generating Process}
-%     \label{fig:dag}
-% \end{figure}
-
-The setting motivating contribution caps is different. In many applications, covariates exhibit heavy-tailed behavior, so prediction inevitably encounters observations in which one or more covariates lie in the tails of their distributions. These tail-region observations may be rare in the training data, but they can be substantively important and can generate abrupt spikes in realized feature contributions. Examples include periods of market stress in finance, extreme environmental conditions in climate modeling, and rare risk profiles in insurance or credit scoring. In such settings, extreme covariate realizations can induce large realized contributions $X_{ij}\beta_j$, even when the coefficients are heavily regularized. This tail-driven amplification creates a form of instability that is not captured by traditional regularization: a model may appear well-behaved in-sample, yet produce predictions dominated by a small number of features when evaluated on such tail-region observations. The root cause is that classical methods control coefficient magnitude rather than the realized influence of features.
-
-
-A substantial literature on fat-tailed data addresses related issues indirectly by focusing on heavy-tailed response variables rather than heavy-tailed covariates. Common approaches include transforming the response, adopting generalized linear models with heavy-tailed response distributions (e.g., Gamma or inverse Gaussian), using generalized distribution regressions, quantile regression, mixture models, or spliced distributions \citep{shi2014, gan2018}. These methods improve modeling of the conditional distribution of the response $Y$, but leave the mapping from covariates $X$ to the linear predictor $X\beta$ unchanged. As a result, they do not regulate realized feature contributions and do not prevent extreme covariate realizations from dominating fitted values.
-
-\subsection{Related Approaches}
+\subsection{Other Approaches to Extreme Covariates}
 
 Practitioners have proposed a variety of strategies to mitigate the effects of heavy-tailed covariates in regression models. These approaches include preprocessing techniques such as transformations and winsorization, robust regression and leverage-based methods, and post-hoc modifications to fitted values. While each of these methods addresses certain aspects of instability induced by extreme covariate realizations, they do so indirectly and do not provide explicit control over realized feature contributions to the linear predictor.
 
-Preprocessing techniques such as logarithmic, power, or rank-based transformations, as well as winsorization and trimming, are commonly used to compress the tails of covariate distributions prior to model fitting. These methods can reduce the influence of extreme covariate values and improve numerical stability. However, they operate independently of the fitted model, require heuristic choices of transformation or truncation thresholds, and alter the scale and interpretation of covariates. Moreover, they provide no guarantees against extreme covariate realizations encountered in new or stress scenarios.
+Preprocessing techniques such as logarithmic, power, or rank-based transformations, as well as winsorization and trimming, are commonly used to compress the tails of covariate distributions prior to model fitting. These methods can reduce the influence of extreme covariate values and improve numerical stability. However, they require choices of transformation or truncation thresholds and can alter the scale and interpretation of covariates. A fixed rule can also be applied to new rows, but it does not jointly choose coefficients to balance predictive fit against feature-specific contribution ceilings.
 
-Robust regression techniques, including M-estimators, reduce the influence of extreme observations by downweighting points with large residuals or high leverage, thereby stabilizing coefficient estimation under heavy-tailed noise \citep{huber1973}. Relatedly, distributionally robust optimization (DRO) methods introduce robustness by minimizing worst-case expected loss over a neighborhood of plausible data-generating distributions \citep{bental2009}. In both cases, robustness is achieved through modifications to the loss or weighting scheme and operates primarily at the level of residuals or aggregate predictive risk. However, neither framework directly regulates the realized contributions of individual features to the linear predictor, and high-leverage covariate realizations with small residuals may still exert disproportionate influence. Consequently, even models estimated using robust regression or DRO can produce large feature contributions in new or stress scenarios, as these methods do not impose explicit bounds on $X_{ij}\beta_j$.
+Robust regression techniques, including residual-based M-estimators, reduce the influence of observations with large errors \citep{huber1973}. Residual downweighting alone need not address a high-leverage covariate row with a small residual, though leverage-aware methods can. Distributionally robust optimization (DRO) instead minimizes worst-case risk over a specified neighborhood of plausible data-generating distributions \citep{bental2009}. These approaches target observation-level influence or aggregate predictive risk. Their standard objectives do not directly regulate individual products $X_{ij}\beta_j$, although they can be adapted or combined with contribution control when the application calls for it.
 
-Another common strategy is to impose constraints on the linear predictor or fitted values after model estimation. While such post-hoc approaches can prevent extreme predictions, they disconnect the estimation procedure from the constraints applied at deployment, as the model is not estimated under the same restrictions that govern its use. This mismatch can lead to suboptimal coefficient estimates and reduced predictive performance.
+Another strategy imposes limits on contributions or fitted values after model estimation. Post-fit clipping can enforce a hard limit on the quantities it clips, but the coefficients were estimated without that limit. It cannot adjust other coefficients to compensate for a clipped contribution. A contribution penalty instead allows coefficients to change jointly during estimation, while accepting that its ceilings are soft. The empirical comparisons below examine the predictive consequences of these distinct choices.
 
 In addition to these methodological approaches, several software packages provide penalized or constrained generalized linear model fitting. The \pkg{glmnet} package \citep{friedman2010} implements efficient algorithms for $\ell_1$- and $\ell_2$-regularized GLMs, but regularization acts only on the coefficient vector and does not constrain realized feature contributions. Packages such as \pkg{mgcv} \citep{wood2017} impose smoothness or shape constraints on functional relationships, while bias-reduction methods such as \pkg{brglm2} \citep{kosmidis2019} address small-sample bias and separation issues. Although these tools provide valuable forms of regularization and stabilization, they do not offer mechanisms for directly bounding the influence of individual features.
 
-Taken together, existing approaches can be understood as targeting different components of model instability: preprocessing methods modify the distribution of covariates, robust regression methods control the influence of observations through residuals, and DRO methods address uncertainty in the data-generating process. However, none of these approaches directly constrain feature-level contributions, leaving open the possibility that a small number of features may dominate model outputs when covariates take extreme values.
+Taken together, these approaches target different components of model instability: preprocessing changes covariates, robust regression changes the role of observations in estimation, and DRO addresses uncertainty about the data-generating distribution. Feature-level contribution control poses a different question: what cost should be assigned when a selected covariate value gives one feature an unusually large role in the prediction?
 
-Contribution caps address this gap by integrating influence constraints directly into the estimation problem. Rather than modifying covariates ex ante or predictions ex post, the cap penalty operates on realized feature contributions $Z_{ij}\beta_j$ during optimization. This ensures that feature influence is bounded in the regions of the covariate space encoded by the evaluation matrix $Z$, while preserving the probabilistic structure of the underlying GLM. By allowing $Z$ to differ from the training design matrix, contribution caps provide a principled mechanism for enforcing stability not only on observed data but also on stress scenarios or anticipated deployment environments. Importantly, this approach does not rely on fitting separate models across regimes. Instead, \pkg{capnet} incorporates regime-specific considerations within a single estimation problem by enforcing contribution constraints over the evaluation matrix $Z$. The resulting model adapts its effective behavior across different regions of the covariate space through the optimization objective, while maintaining a unified and interpretable parameterization.
+Contribution caps address this question by adding a penalty for large realized products $Z_{ij}\beta_j$ during optimization. The GLM loss still uses the training observations, while the evaluation matrix $Z$ identifies the covariate values at which contribution size matters. Setting $Z$ to selected stress scenarios or to covariates available at a forecast origin incorporates those considerations without fitting a separate coefficient vector for each regime. A finite penalty discourages exceedances; it does not guarantee a bound on $Z$, much less on covariate values absent from $Z$. The same coefficient vector applies across the selected scenarios, with its estimation reflecting the specified trade-off between fit and contribution size.
 
-\subsection{Motivating Example}
+\subsection{Illustrative Simulation}
 
-In this subsection, we present two simplified linear regression examples that illustrate the theoretical considerations discussed above and demonstrate practical use cases for \pkg{capnet}.
-
-First, we consider a simulated setting in which the outcome variable $y$ is generated from a latent true-signal matrix $X^*$ according to a linear data generating process. In estimation and prediction, however, the analyst does not observe $X^*$ directly but instead observes a noisy proxy matrix $X$, whose distribution exhibits heavier tails for a subset of covariates. This setup can be interpreted as a measurement error problem in which the observed covariates are imperfect and heteroskedastic proxies for the true latent features.
-
-Formally, the outcome is generated as
+We use a repeated simulation to examine contribution control when observed covariates are noisy proxies for latent signals. Each of 10 independent replications has 400 training and 100 test observations with eight predictors. Latent rows follow $X_i^*\sim N(0,\Sigma)$, where $\Sigma_{jk}=0.5^{|j-k|}$, and
 \[
-y_i = X^*_i \beta + \varepsilon_i, \quad \varepsilon_i \sim \mathcal{N}(0, \sigma^2),
+y_i=X_i^{*\top}\beta+\varepsilon_i,\qquad
+\beta=(2.5,1.9,1.3,0.9,0.8,0,0,0)^\top,\qquad
+\varepsilon_i\sim N(0,1).
 \]
-where $\beta$ is a sparse coefficient vector.\footnote{Sparsity is introduced by randomly setting a subset of coefficients to zero.}
+The observed predictors are $X=X^*+E$.
 
-The observed covariates are constructed by adding noise to $X^*$. Features are partitioned into a stable set $\mathcal{S}$ and an unstable set $\mathcal{U}$. For features in $\mathcal{S}$, the added noise is homoskedastic Gaussian:
+The first five features carry signal and the last three have zero coefficients. In the mixture scenario, features 1 and 2 have proxy-noise standard deviation 10, with spike probability 0.10 in training and 0.20 in the test batch; otherwise their noise standard deviation is 0.25. The remaining features retain standard deviation 0.25. The homoskedastic control uses standard deviation 0.25 for every feature. The mixture is an explicit test-time stress shift: the evaluation batch contains more large proxy errors than the training sample. This model separates genuine signal from occasional large proxy errors. The composite error in a regression on observed predictors contains measurement error and is generally correlated with those predictors. The simulation therefore illustrates an application of contribution control, rather than a general correction for measurement-error bias. The variance-mixture noise is leptokurtic but is not heavy-tailed in the strict asymptotic sense.
+
+Within each replication and scenario, ten-fold cross-validation selects the uncapped elastic net's $\lambda$ with $\alpha=0.5$ and standardized training columns. The selected $\lambda$ is held fixed across capped specifications. Let $b_j^{\rm uni}$ denote a univariate training OLS slope. We construct training-only contribution scales
 \[
-\eta_{ij} \sim \mathcal{N}(0, \sigma_{\text{low}}^2), \quad j \in \mathcal{S}.
+B_j=\max\left\{|b_j^{\rm uni}|q_{0.95}(|X_{\cdot j}|),\;0.05s_y\right\},
+\qquad L_j=\kappa B_j,
 \]
-For features in $\mathcal{U}$, the noise variance varies across observations, mimicking leptokurtic measurement error. Specifically, for each observation $i$ and feature $j \in \mathcal{U}$, we draw
-\[
-F_{ij} \sim \text{Bernoulli}(p),
-\]
-and define
-\[
-s_{ij} =
-\begin{cases}
-\sigma_{\text{low}}, & F_{ij} = 0, \\
-\sigma_{\text{high}}, & F_{ij} = 1.
-\end{cases}
-\]
-Conditional on $F_{ij}$, the noise term follows
-\[
-\eta_{ij} \mid F_{ij} \sim \mathcal{N}(0, s_{ij}^2).
-\]
-The observed design matrix is then given by $X = X^* + \eta$.
+where the quantile and response standard deviation use training observations only. This calibration expresses ceilings in contribution units and avoids nearly zero ceilings for features with weak univariate associations. We cross $\kappa\in\{0.5,1,2,4\}$ with $\gamma\in\{0.1,1,10,100\}$. The baseline sets $\gamma=0$.
 
-Substituting $X^*_i = X_i - \eta_i$, the response can equivalently be written in terms of the observed covariates as
-\[
-y_i = X_i\beta + u_i,
-\]
-where
-\[
-u_i = \varepsilon_i - \eta_i \beta .
-\]
-Thus, when the analyst estimates the model using the observed design matrix $X$, the fitted model is based on covariates that are noisy proxies for the latent signal $X^*$. Because the measurement error for unstable features occasionally has much larger variance, the observed covariates inherit heavy-tailed behavior. These tail realizations can generate large realized contributions $X_{ij}\beta_j$, even when the underlying latent features are more stable.
+Joint evaluation fits one model using all test covariate rows in the penalty, assuming those covariates are available together. Walk-forward evaluation instead re-optimizes on each test row with the historical training sample held fixed. Neither scheme uses test responses in fitting or ceiling calibration. Tables~\ref{tab:simulate_full} and~\ref{tab:simulate_walk} report mean test MSE across the 10 mixture-scenario replications. The homoskedastic-control results and replication-level details are in \path{vignettes/paper/example_simulation.Rmd}.
 
-The observed process produces covariates that are heteroskedastic and heavy-tailed for unstable features. When estimating linear models using $X$, conventional methods may encounter two related challenges. First, extreme realizations can exert disproportionate influence on coefficient estimates, leading to instability and degraded out-of-sample performance. Second, large covariate realizations may induce excessive concentration of predictive weight in a small number of features, allowing individual covariates to dominate the magnitude and direction of predictions. Importantly, the second issue persists even when coefficient shrinkage is applied. Because classical regularization methods act on $\beta$ rather than on realized contributions $X_{ij}\beta_j$, extreme covariate realizations can still generate large contributions and dominate model outputs.
-
-In settings where Gaussian assumptions for covariates are appropriate, such extreme observations may be treated as outliers and addressed using winsorization or robust loss functions. However, when the covariate distribution is genuinely heavy-tailed or when it is difficult to distinguish informative extreme values from noise, these approaches may systematically downweight predictive features and degrade performance. By contrast, \pkg{capnet} allows features to retain predictive influence while explicitly limiting their contribution to the fitted values, enabling control over feature dominance without discarding extreme observations.
-
-To evaluate performance, the data are split into training and testing sets. The elastic net tuning parameter $\lambda$ is selected via cross-validation with an equal mixture of $\ell_1$ and $\ell_2$ penalties. For \pkg{capnet}, we consider multiple configurations: (i) global evaluation on the full test matrix versus walk-forward evaluation in which models are refit sequentially, (ii) a range of penalty strengths, and (iii) varying contribution ceiling levels.\footnote{Contribution ceilings are computed as multiples of the univariate regression coefficients between each feature and the outcome in the training set.}
-
-Each configuration is compared against the unconstrained elastic net benchmark, corresponding to a zero contribution cap. Tables~\ref{tab:simulate_full} and~\ref{tab:simulate_walk} report out-of-sample performance for the full and walk-forward evaluation schemes, respectively.
-
-\begin{table}[H]
+\begin{table}[ht]
     \centering
-    \begin{tabular}{|cc|ccccc|}
-        \hhline{|=======|}
-        \multicolumn{2}{|c|}{\multirow{2}{*}{OOS MSE}} 
-        & \multicolumn{5}{c|}{Contribution Ceiling Multiplier} \\
-        \multicolumn{2}{|c|}{} 
-        & $0$ & $2$ & $4$ & $8$ & $16$\\
-        \hline
-        \multirow{5}{*}{Penalty Strength} 
-        & $0$ 
-        & \colorbox{gray!20}{\strut $8.650$} & & & &\\
-        & $0.1$ 
-        & & $8.536$ & $8.441$ & $8.571$ & $8.650$\\
-        & $1$ 
-        & & $9.071$ & $8.353$ & $8.527$ & $8.650$\\
-        & $10$ 
-        & & $9.650$ & $8.341$ & $8.519$ & $8.650$\\
-        & $100$ 
-        & & $9.762$ & $\mathbf{8.340}$ & $8.519$ & $8.650$\\
-        \hhline{|=======|}
-    \end{tabular}
-    \caption{Standard \pkg{capnet} models out-of-sample mean squared error (MSE) on the simulated dataset. The case $\gamma=0$ and $\text{multiplier} = 0$ corresponds to the uncapped elastic net benchmark. Moderate contribution ceilings (e.g., multipliers of 2--4) improve predictive performance relative to the uncapped model.}
+    \small
+    \input{tables/simulation-joint.tex}
+    \caption{Mean test MSE for joint evaluation in the proxy-noise mixture scenario over 10 replications. The uncapped row is common to all ceiling levels. Bold marks the lowest mean among capped specifications in this table.}
     \label{tab:simulate_full}
 \end{table}
 
-\begin{table}[H]
+\begin{table}[ht]
     \centering
-    \begin{tabular}{|cc|ccccc|}
-        \hhline{|=======|}
-        \multicolumn{2}{|c|}{OOS MSE} 
-        & \multicolumn{5}{c|}{Contribution Ceiling Multiplier} \\
-        \multicolumn{2}{|c|}{} 
-        & $0$ & $2$ & $4$ & $8$ & $16$\\
-        \hline
-        \multirow{5}{*}{Penalty Strength} & $0$ & \colorbox{gray!20}{\strut $8.650$} & & & &\\
-        & $0.1$ & & $8.098$ & $8.104$ & $8.412$ & $8.650$\\
-        & $1$ & & $8.118$ & $8.096$ & $8.405$ & $8.650$\\
-        & $10$ & & $8.124$ & $\mathbf{8.095}$ & $8.404$ & $8.650$\\
-        & $100$ & & $8.124$ & $\mathbf{8.095}$ & $8.404$ & $8.650$\\
-        \hhline{|=======|}
-    \end{tabular}
-    \caption{Walk-forward \pkg{capnet} models out-of-sample mean squared error (MSE) on the simulated dataset. Each model is refit sequentially along the evaluation path. All capped specifications outperform the uncapped benchmark, illustrating that local contribution control improves predictive stability and accuracy relative to global constraints.}
+    \small
+    \input{tables/simulation-walk.tex}
+    \caption{Mean test MSE for per-observation walk-forward evaluation under the same data draws and ceiling calibration as Table~\ref{tab:simulate_full}. Bold marks the lowest mean among capped specifications in this table.}
     \label{tab:simulate_walk}
 \end{table}
 
-\pkg{Capnet} frequently outperforms the benchmark across most configurations, although excessively restrictive ceilings can degrade performance. Conversely, when ceilings are sufficiently large, the constraint becomes inactive and the solution reduces to the unconstrained elastic net. While the penalty strength affects performance, particularly when contribution ceilings are tight, its influence is generally smaller than that of the ceiling level itself, highlighting the importance of selecting appropriate contribution limits. The walk-forward evaluation approach consistently delivers improved performance and greater stability. This behavior reflects the fact that imposing global contribution constraints over an entire evaluation set can lead to overly aggressive penalization, whereas local, observation-level constraints adapt more flexibly to changing covariate realizations. As discussed further in the software implementation section, the walk-forward approach is generally preferred despite its higher computational cost, particularly when heuristics for selecting contribution ceilings are imperfect.
+Under this test-time stress shift, the uncapped model's mean test MSE is 13.648. The lowest joint-evaluation mean in the grid is 12.933 at $\gamma=10$ and $\kappa=1$, a 5.2\% reduction. The lowest walk-forward mean is 12.049 at $\gamma=100$ and $\kappa=0.5$, an 11.7\% reduction. The test batch contains covariate information used by the joint penalty, but no test responses enter fitting. The joint setting reduced MSE in 7 of 10 replications. The size of the reductions depends on the realized test spikes, so this is an illustrative stress test for the stated train/test shift.
 
-As a second example, consider an application in quantitative finance. In a medium-frequency market-timing model, a set of covariates is used to forecast excess equity risk premia. Financial covariates are often noisy and heavy-tailed, making it difficult to distinguish meaningful extreme values from noise. A central challenge is to construct a model that captures informative deviations from long-run patterns while maintaining a well-controlled risk profile. This includes limiting the extent to which any single feature can influence the linear predictor, as highly dominant features can create concentration risk and lead to unstable portfolio outcomes. In such settings, contribution caps provide a direct mechanism for controlling feature-level influence while preserving predictive signal. More details are discussed in Section~\ref{sec:examples-finance}.
+The benefit depends on the amount of capping. Very tight ceilings can discard useful signal; very loose ceilings have little effect. In the homoskedastic control, where observed predictors track the latent signal more closely, the uncapped mean MSE is 1.880 and capping offers little improvement. The bolded grid minima describe these test sets; they are not performance estimates for a separately validated tuning rule.
 
-The third example illustrates the application of contribution caps beyond the additive, Gaussian setting by considering a count-regression model that forecasts aggregate web traffic from a panel of individual, heavy-tailed content-level pageview series. Article-level popularity on the web is well documented to be Zipf-like and heavy-tailed: a small number of pages can go viral and receive orders of magnitude more traffic than usual on a given day. A Poisson log-link model that forecasts tomorrow's site-wide traffic from today's per-article pageviews provides a setting to demonstrate \pkg{capnet}'s utility. Without a contribution cap, a single freak spike in one article's traffic can dominate the forecast, even though the associated coefficient need not be unusually large under a standard fit. Because the response enters through a log link in this setting, contribution caps bound a \emph{multiplicative} rather than additive influence on the forecast, as discussed in Section~\ref{sec:framework}. Further details are discussed in Section~\ref{sec:examples-web}.
+The two applications extend this comparison to observed data. Section~\ref{sec:examples-finance} studies equity-return forecasts, where signal dominance can affect trading decisions. Section~\ref{sec:examples-web} studies next-day pageviews using a Poisson log-link model, where feature contributions act on the log-mean scale.
 
 \section{The Contribution-Cap Framework}\label{sec:framework}
 
 \subsection{Model Setup}
 
-Let $y \in \mathbb{R}^n$ denote the response vector and $X \in \mathbb{R}^{n \times p}$ the covariate matrix, with rows $X_i^\top$ representing observations and columns $X_{\cdot j}$ representing covariates. Consider a generalized linear model with canonical link, under which the linear predictor is
-\[
-\eta = X\beta,
-\]
-The \pkg{capnet} package supports model families for which the negative log-likelihood is smooth and convex in $\eta$, ensuring that the resulting penalized estimation problem remains convex.
-
-For Gaussian regression with identity link, the negative log-likelihood is
-\[
-\ell(y,\beta, X) = \frac{1}{2n}\|y - X\beta\|_2^2.
-\]
-For logistic regression (binomial with logit link),
-\[
-\ell(y,\beta,X) = \frac{1}{n}\sum_{i=1}^n \left[ \log\!\left(1 + e^{x_i\beta}\right) - y_ix_i\beta \right].
-\]
-For Poisson regression with log link,
-\[
-\ell(\beta) = \frac{1}{n}\sum_{i=1}^n \left( e^{x_i\beta} - y_i x_i\beta \right).
-\]
-For Gamma regression with log link and fixed shape parameter,
-\[
-\ell(\beta) = \frac{1}{n}\sum_{i=1}^n \left( y_i e^{-x_i\beta} + x_i\beta \right).
-\]
-Each likelihood above is expressed as an average over the $n$ training observations, consistent with how \pkg{capnet} normalizes the likelihood term internally.
-
-These families cover the most commonly used GLMs in applied work and share a convenient structure: the likelihood depends on $\beta$ only through the linear predictor $X\beta$ and yields a convex optimization landscape. This property allows \pkg{capnet} to incorporate additional penalties without altering the fundamental estimation framework.
+Let $y\in\mathbb{R}^n$ denote the response vector and $X\in\mathbb{R}^{n\times p}$ the training design matrix. Row $i$ is $X_i^\top$, and $\beta\in\mathbb{R}^p$ contains the slope coefficients. With intercept $\beta_0$, the linear predictor and conditional mean are
+\begin{equation}
+\eta_i=\beta_0+X_i^\top\beta,\qquad \mu_i=g^{-1}(\eta_i).
+\label{eq:predictor}
+\end{equation}
+For Gaussian regression with identity link, we minimize the average squared-error loss, equivalent to a negative log-likelihood with unit variance up to a constant. The same estimation framework applies to other families with a smooth, convex loss in $\eta$. The four supported family--link combinations have losses
+\begin{equation}
+\ell(y,\beta_0,\beta,X)=\frac{1}{n}\sum_{i=1}^n
+\begin{cases}
+\tfrac12(y_i-\eta_i)^2, & \text{Gaussian, identity link},\\
+\log(1+e^{\eta_i})-y_i\eta_i, & \text{Bernoulli, logit link},\\
+e^{\eta_i}-y_i\eta_i, & \text{Poisson, log link},\\
+y_i e^{-\eta_i}+\eta_i, & \text{Gamma, log link}.
+\end{cases}
+\label{eq:likelihood}
+\end{equation}
+Constants independent of the parameters are omitted, and the Gamma shape is fixed at one for the loss normalization. The first three links are canonical; the Gamma log link is not canonical but still yields a convex loss for positive responses. All losses are averaged over the training observations. The intercept is fitted by default and is excluded from both coefficient and contribution penalties.
 
 \subsection{Contribution Caps}
 
-A distinctive feature of \pkg{capnet} is that contribution caps are computed not necessarily on the training matrix $X$, but on a user-supplied evaluation matrix $Z \in \mathbb{R}^{m \times p}$. Each row of $Z$ represents an evaluation scenario, and each column corresponds to a feature. This flexibility allows users to regulate feature influence not only on the training data but also on future or representative environments---an important consideration in applications such as forecasting, risk modeling, or market-timing systems where large contributions may manifest primarily in out-of-sample conditions.
+For evaluation observation $i$ and feature $j$, the realized contribution to the linear predictor is $Z_{ij}\beta_j$. A contribution ceiling $L_j\geq0$ specifies the desired upper limit on its magnitude. The target inequality $|Z_{ij}\beta_j|\leq L_j$ is encouraged by a penalty rather than imposed as a hard constraint.
 
-For observation $i$ and covariate $j$, the realized contribution of covariate $j$ in evaluation context $Z$ is
-\[
-Z_{ij}\beta_j.
-\]
-\pkg{capnet} imposes a soft upper bound on these realized contributions via
-\[
-|Z_{ij}\beta_j| \le L_j,
-\]
-where $L_j > 0$ is a user-specified cap.
+The evaluation matrix $Z\in\mathbb{R}^{m\times p}$ has the same feature columns and units as $X$ but may contain different observations. Setting $Z=X$ assesses training contributions; other choices include specified stress scenarios and observed covariates at prediction time. In a sequential forecast, the current covariates may enter the penalty before their response is known, provided they are available when the forecast is issued. Figure~\ref{fig:timing} summarizes this information flow.
 
-In addition to $L$, \pkg{capnet} allows an optional row-wise multiplier $w \in \mathbb{R}_{+}^m$ (default $w_i = 1$ for all $i$; this is the \code{multiplier} argument of \code{capnet()}, distinct from the scalar cap multiplier used to construct $L$ in the illustrative simulation of Section~\ref{sec:motivate}) that rescales contributions during cap enforcement only, without entering the likelihood term above; this is useful when the same nominal cap should apply after accounting for observation-specific scaling (e.g., differing notional or exposure across evaluation rows). Violations of the resulting, possibly rescaled constraint are penalized through the smooth hinge-squared penalty, averaged over evaluation rows,
-\[
-C(\beta,Z,L,w)
-=
-\frac{1}{m}\sum_{j=1}^p\sum_{i=1}^m \left[\frac{\left( |w_iZ_{ij}\beta_j| - L_j \right)_+}{w_i}\right]^2,
-\qquad
-(z)_+ = \max(z,0).
-\]
-When $w_i = 1$ for all $i$ (the default), this reduces to
-$C(\beta,Z,L) = \frac{1}{m}\sum_{j=1}^p\sum_{i=1}^m\left(|Z_{ij}\beta_j| - L_j\right)_+^2$.
+This separation matters when the behaviors of concern are poorly represented by average training observations. A risk model might include a set of specified adverse covariate combinations in $Z$, while a sequential prediction system can assess the contribution of the next observed covariate row before its outcome arrives. The likelihood continues to use the historical $(X,y)$; the rows of $Z$ affect coefficients only through the cap penalty. Choosing scenarios does not make the fitted rule automatically robust to every future value, and using a covariate row in $Z$ is legitimate for a forecast only when that row would be available at the stated forecast origin.
 
-This penalty activates only when the magnitude of a covariate’s contribution exceeds its cap and then grows quadratically. Because the hinge-squared function is continuously differentiable, it is directly compatible with gradient-based optimization methods.
+\begin{figure}[ht]
+\centering
+\small
+\begin{tabular}{c@{\;$\longrightarrow$\;}c@{\;$\longrightarrow$\;}c}
+\shortstack{Historical data\\$(X,y)$} &
+\shortstack{Forecast origin $t$\\observe $Z_t$; optimize and predict} &
+\shortstack{After the forecast\\observe the target response}
+\end{tabular}
+\caption{Information available in sequential prediction. The likelihood uses historical responses, while the contribution penalty may use covariates observed at the forecast origin. Future responses and covariates unavailable at that origin are excluded. A conditional batch comparison instead assumes that all covariate rows in its batch are supplied together, as distinguished in Section~\ref{sec:examples-web}.}
+\label{fig:timing}
+\end{figure}
 
-The interpretation of $L_j$ is unified across GLM families because all models operate through the linear predictor. In Gaussian models, $Z_{ij}\beta_j$ is an additive contribution to the estimated mean; bounding it directly limits additive influence. In logistic regression, $Z_{ij}\beta_j$ is a change in log-odds, so the cap limits the corresponding odds multiplier to lie within $[e^{-L_j}, e^{L_j}]$. In Poisson and Gamma regression, $Z_{ij}\beta_j$ adjusts the log-mean, yielding a multiplicative bound on the expected count or positive-valued outcome. A single formulation therefore provides additive control in Gaussian models and multiplicative control in log- and logit-link GLMs.
+An optional row-wise multiplier $w_i>0$ rescales contributions for cap assessment. It is supplied through the \code{multiplier} argument and does not enter the likelihood. For example, it can represent an observation-specific exposure scale. The resulting penalty is
+\begin{equation}
+C(\beta,Z,L,w)=\frac{1}{m}\sum_{j=1}^p\sum_{i=1}^m
+\left[\frac{(|w_iZ_{ij}\beta_j|-L_j)_+}{w_i}\right]^2,
+\qquad (a)_+=\max(a,0).
+\label{eq:weighted-cap}
+\end{equation}
+The normalization by $w_i$ makes this equivalent to assessing unscaled contributions against row-specific ceilings $L_j/w_i$. With the default $w_i=1$, it reduces to
+\begin{equation}
+C(\beta,Z,L)=\frac{1}{m}\sum_{j=1}^p\sum_{i=1}^m
+(|Z_{ij}\beta_j|-L_j)_+^2.
+\label{eq:cap}
+\end{equation}
+The penalty is zero within the ceilings and grows quadratically with exceedances. It is convex and continuously differentiable, including at the activation boundary.
+
+Ceilings are expressed on the linear-predictor scale. In Gaussian regression, a feature contributes additively to the mean. In logistic regression, it contributes to log-odds; in Poisson and Gamma regression, it contributes to the log-mean. If a contribution satisfies its ceiling, its odds or mean multiplier lies within $[e^{-L_j},e^{L_j}]$ for the default $w_i=1$. A soft penalty encourages this range but does not guarantee it. Nor does a feature-level ceiling directly bound the total prediction or a feature's share of that prediction.
 
 \subsection{Penalized Estimation}
 
-The \pkg{capnet} estimator solves the convex optimization problem
+The estimator minimizes a loss with separate coefficient and contribution penalties:
 \begin{equation}
-\hat\beta
-=
-\arg\min_{\beta \in \mathbb{R}^p}
+(\hat\beta_0,\hat\beta)=\arg\min_{\beta_0,\beta}
 \left\{
-    \ell(y,\beta,X)
-    +
-    \lambda\!\left[\frac{1-\alpha}{2}\|\beta\|_2^2 + \alpha\|\beta\|_1\right]
-    +
-    \gamma\, C(\beta,Z,L,w)
-\right\}
+\underbrace{\ell(y,\beta_0,\beta,X)}_{\text{predictive loss}}
++\underbrace{\lambda\!\left[\frac{1-\alpha}{2}\|\beta\|_2^2+\alpha\|\beta\|_1\right]}_{\text{elastic net penalty}}
++\underbrace{\gamma C(\beta,Z,L,w)}_{\text{contribution penalty}}
+\right\}.
 \label{eq:loss}
 \end{equation}
-where $\lambda \ge 0$ controls the overall intensity of coefficient regularization, $\alpha \in [0,1]$ determines the balance between $\ell_1$ and $\ell_2$ penalties, and $\gamma \ge 0$ controls the strength of the contribution-cap penalty. This formulation mirrors the elastic-net parameterization familiar from \citet{friedman2010} and allows users to employ ridge-like, lasso-like, or hybrid regularization alongside contribution caps.
+Here $\lambda\geq0$ controls coefficient regularization, $\alpha\in[0,1]$ determines the elastic net mixture, and $\gamma\geq0$ controls contribution penalization. This parameterization follows the elastic net convention of \citet{friedman2010}. The $\ell_1$ term encourages sparsity, the $\ell_2$ term stabilizes coefficients under collinearity, and the cap penalty discourages excessive contributions on $Z$. Setting $\gamma=0$ recovers an elastic net GLM; setting $\lambda=0$ leaves only contribution regularization.
 
-A key design feature is the explicit separation of the training matrix $X$ and the evaluation matrix $Z$. When $Z = X$, \pkg{capnet} regulates contributions on the training data, recovering the standard setting. When $Z$ differs from $X$---such as when $Z$ contains representative future market states, stress scenarios, or held-out data---\pkg{capnet} ensures that covariate influence remains bounded even in environments that may not be presented in the training sample. This provides a principled mechanism for controlling contribution‐level instability or concentration risk in downstream predictive tasks.
+These components serve different purposes and can be used together. A coefficient may be small in standardized units but still produce a large contribution when a feature takes an unusual value. Conversely, a coefficient that produces a large contribution on one selected row may improve fit enough to remain useful. Increasing $\gamma$ gives the cap penalty more weight relative to the loss and coefficient penalty; it does not turn a soft ceiling into a hard constraint. The meaningful range of $\gamma$ depends on the loss and the units of the predictors, so it must be interpreted together with the chosen family, $Z$, and $L$.
 
-The three penalty components interact in complementary ways. The $\ell_1$ term enables sparsity, the $\ell_2$ term improves numerical stability in the presence of multicollinearity, and the contribution-cap penalty regulates large or volatile contributions. Setting $\gamma=0$ recovers classical penalized GLMs; setting $\lambda=0$ yields a pure contribution-regularized model; and using both penalties allows simultaneous control of coefficient magnitude and covariate influence.
+Equation~\ref{eq:loss} is stated on the original feature scale. By default, the implementation standardizes the training columns and applies the elastic net penalty to coefficients in those standardized units. The contribution penalty is always evaluated using original-scale $Z$ and coefficients. Thus, interpreting the coefficient penalty literally on the original scale requires \code{standardize = FALSE}; standardization changes its implied feature weights.
 
-Because the hinge-squared cap penalty is convex and smooth, and the GLM likelihoods considered are convex in the linear predictor, the overall objective remains convex and continuously differentiable except for the nondifferentiability introduced by the $\ell_1$ term. This structure is well suited to limited-memory quasi-Newton optimization and provides stable convergence across model families and evaluation matrices.
+The objective is convex for the supported losses and fixed $Z$, $L$, and $w$. Its only nonsmooth component is the $\ell_1$ term. These properties permit limited-memory quasi-Newton optimization with specialized treatment of that term \citep{nocedal1980,andrew2007}; they do not guarantee that every numerical fit converges. Users should inspect the returned convergence status.
 
 \subsection{Optimization}
 
-As discussed above, the negative likelihood function (\ref{eq:loss}) is smooth and convex for all supported GLM families. The only source of nondifferentiability arises from the $\ell_1$ term. These properties make the objective well suited to limited-memory quasi-Newton methods. \pkg{capnet} uses the \pkg{lbfgs} package for optimization \cite{lbfgs}. When $\alpha=0$, the objective function is fully smooth, and standard L-BFGS method is applied. When $\alpha>0$, the $\ell_1$ component introduces non-smoothness at zero, and the optimizer automatically switches to the orthant-wise limited-memory quasi-Newton (OWL-QN) method, which handles the $\ell_1$ subgradient by restricting updates to remain within the current orthant, enabling quasi-Newton updates while preserving sparsity-inducing behavior \cite{andrew2007}.
+For fits without finite coefficient bounds, \pkg{capnet} uses the \pkg{lbfgs} package \citep{lbfgs}. Standard L-BFGS is used when $\lambda\alpha=0$. When $\lambda\alpha>0$, the orthant-wise limited-memory quasi-Newton (OWL-QN) method handles the $\ell_1$ term \citep{andrew2007}. Fits with finite coefficient bounds instead use a projected proximal-gradient solver, with soft-thresholding for the $\ell_1$ term and projection onto the coefficient bounds.
 
-Calling the \pkg{lbfgs} optimizer requires the objective and gradient functions. From (\ref{eq:loss}), we calculate the gradient as
+Let $F$ denote the smooth part of Equation~\ref{eq:loss}. Its slope gradient is
 \begin{equation}
-    \nabla \mathcal{L}(\beta)=\nabla \ell(y,\beta,X)
-+
-\lambda\Big[(1-\alpha)\beta + \alpha\,\partial\|\beta\|_1\Big]
-+
-\gamma\, \nabla C(\beta,Z,L,w)
+\nabla_\beta F=\nabla_\beta\ell+\lambda(1-\alpha)\beta
++\gamma\nabla_\beta C.
 \label{eq:gradient}
 \end{equation}
+The $\ell_1$ term is handled separately by the optimizer. For Gaussian, Bernoulli, and Poisson losses, the likelihood gradient is $X^\top(\mu-y)/n$. For the Gamma log-link loss, it is $X^\top(\bm{1}-y/\mu)/n$, where division is element-wise. The intercept gradient is the average of the corresponding residual expression.
 
-The first component is the standard GLM score, averaged over observations to match (\ref{eq:loss}),
-\[\nabla \ell(y,\beta,X)=\frac{1}{n}X^\top(\mu - y),\qquad\mu = g^{-1}(X\beta)\]
-And for the contribution-cap penalty, the gradient is
-\[
-\frac{\partial C}{\partial \beta_j}
-=
-\frac{2}{m}\sum_{i=1}^m\left[\frac{\left(|w_iZ_{ij}\beta_j| - L_j\right)_+}{w_i}\right]
-\cdot
-\mathrm{sign}(w_iZ_{ij}\beta_j)
-\cdot Z_{ij}.
-\]
-The hinge-squared form ensures differentiability even at the activation boundary.
+The contribution-penalty gradient has components
+\begin{equation}
+\frac{\partial C}{\partial\beta_j}
+=\frac{2}{m}\sum_{i=1}^m
+\frac{(|w_iZ_{ij}\beta_j|-L_j)_+}{w_i}
+\operatorname{sign}(w_iZ_{ij}\beta_j)Z_{ij}.
+\label{eq:cap-gradient}
+\end{equation}
+The implementation evaluates this gradient in matrix form:
+\begin{equation}
+\nabla_\beta C=\frac{2}{m}\big((V\odot S)\odot Z\big)^\top\bm{1},
+\label{eq:matrix-gradient}
+\end{equation}
+where $A=\operatorname{diag}(w)Z\operatorname{diag}(\beta)$,
+$S=\operatorname{sign}(A)$, and
+$V=\operatorname{diag}(w)^{-1}(|A|-\bm{1}L^\top)_+$.
+Absolute values, signs, positive parts, and $\odot$ operate element-wise. With standardized training columns, the optimizer first maps slopes back to original units to evaluate contributions, then divides the resulting gradient component by the corresponding training-column scale using the chain rule.
 
-Also define the contribution matrix as
-\[A=\text{diag}(w)\,Z\,\text{diag}(\beta)\in\mathbb R^{m\times p}\]
-$S=\text{sign}(A)$ element-wise, and $V=\text{diag}(w)^{-1}\big(|A|-\bm{1}L^\top\big)_+$. The gradient of the contribution-cap penalty can be written in the following matrix form:
-\[\nabla_\beta C=\frac{2}{m}\Big((V\odot S)\odot Z\Big)^\top\bm{1}\in\mathbb R^p\]
-where $\odot$ is element-wise multiplication. This matches the gradient computed internally by the \pkg{capnet} package, up to one additional detail: when \code{standardize = TRUE} (the default), coefficients are optimized in standardized units for numerical conditioning, and this gradient is evaluated by first mapping $\beta$ back to the original, unstandardized scale via the corresponding chain rule.
-
-The evaluation matrix $Z$ enters the optimization only through the penalty term. Because $C(\beta,Z,L,w)$ decomposes additively over covariates, the cost of computing its gradient grows linearly in the number of rows of $Z$. This design allows users to specify large or diverse evaluation sets without affecting the GLM likelihood computation.
+For dense matrices, evaluating the cap penalty and its gradient costs $O(mp)$ per iteration. Changing $Z$ affects this computation but does not alter the likelihood data $(X,y)$.
 
 \section{Software Implementation and Example Usage}\label{sec:software}
 
@@ -346,10 +250,10 @@ The evaluation matrix $Z$ enters the optimization only through the penalty term.
     \hline\hline
         Function & Purpose \\
     \hline \\[-0.3cm]
-        \code{simulate_capnet_data()} & Generates simulated data for linear regression experiments and examples. \\[0.6em]
-        \code{capnet()} & Fits a contribution-capped elastic net regression model for a fixed set of hyper-parameters. \\[0.6em]
+        \code{simulate_capnet_data()} & Generates simulated data for the supported regression families. \\[0.6em]
+        \code{capnet()} & Fits a contribution-capped elastic net regression model for a fixed set of hyperparameters. \\[0.6em]
         \code{walk_capnet()} & Computes a sequence of \code{capnet} models along a user-specified path of the evaluation dataset. \\[0.6em]
-        \code{cv_capnet()} & Performs cross-validation over a grid of elastic net hyper-parameters to select a preferred model specification. \\[0.6em]
+        \code{cv_capnet()} & Performs cross-validation over a grid of elastic net hyperparameters to select a preferred model specification. \\[0.6em]
         \code{coef_path()} & Extracts regression coefficients from a collection of fitted \code{capnet} models along a hyper-parameter path. \\[0.6em]
         \code{capnet_violations()} & Identifies and summarizes violations of the soft contribution-cap constraints for a fitted \code{capnet} model. \\[0.6em]
         \code{plot_redistribution()} & Visualizes changes in regression coefficients and feature-level contributions between two fitted \code{capnet} models. \\[0.1cm]
@@ -359,17 +263,16 @@ The evaluation matrix $Z$ enters the optimization only through the penalty term.
     \label{tab:capnet-functions}
 \end{table}
 
-This section provides a simple illustration of using the \pkg{capnet} package to fit the contribution-capped elastic net regression models. We will mostly consider the linear regression model and then briefly discuss extensions to the logistic, Poisson, and gamma regression cases. The package is available from GitHub at \url{https://github.com/harryziyuhe/capnet} and can be installed via the \pkg{remotes} package and loaded in the usual manner:
+This section illustrates model fitting, sequential prediction, and diagnostics. We begin with Gaussian regression and then show how the same interface supports other families. The package can be installed from its GitHub repository and loaded as follows:
 
 \begin{Code}
     R> remotes::install_github("harryziyuhe/capnet")
     R> library("capnet")
 \end{Code}
 
-We first load a small simulated dataset, including the training design matrix and response vector, the contribution cap vector, and evaluation design matrix, using the built-in \\\code{simulate_capnet_data()} function.
+We generate a small simulated dataset containing a training design matrix, response vector, contribution ceilings, and evaluation matrix using \code{simulate_capnet_data()}. Printed coefficients and predictions below illustrate one simulation draw; fresh calls can produce different numerical values.
 
 \begin{Code}
-    R> set.seed(123)
     R> data <- simulate_capnet_data(n=100, p=10, m=20)
     R> X <- data$X
     R> y <- data$y
@@ -377,15 +280,15 @@ We first load a small simulated dataset, including the training design matrix an
     R> Z <- data$Z
 \end{Code}
 
-The \pkg{capnet} package is mainly used with calls to estimation three functions as shown in Table~\ref{tab:capnet-functions}: \code{capnet()}, \code{walk_capnet()}, and \code{cv_capnet()}. The interface is designed to mimic popular \proglang{R} packages for regularized generalized linear models, most notably \pkg{glmnet} \citep{friedman2010}. To perform the contribution-capped regression, \code{capnet()} takes as required inputs, the design matrix \code{x}, the response vector \code{y}, and the contribution cap vector \code{L}. The function also take several optional arguments. The \code{z} matrix specifies the evaluation matrix for the feature contributions. The \code{family} argument specifies the regression model (\code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, or \code{"gamma"}). \code{alpha}, \code{lambda}, and \code{gamma} controls the elastic net and contribution cap penalty strengths, and \code{upper.limits} and \code{lower.limits} vectors specify coefficients box constraints. 
+Table~\ref{tab:capnet-functions} summarizes the main functions. The estimation interface follows familiar conventions from \pkg{glmnet} \citep{friedman2010}. The \code{capnet()} function requires the design matrix \code{x}, response \code{y}, and ceiling vector \code{L}. Optional arguments include the evaluation matrix \code{z}; model \code{family}; penalty parameters \code{alpha}, \code{lambda}, and \code{gamma}; and coefficient bounds \code{lower.limits} and \code{upper.limits}.
 
-By default, the model fits a Gaussian model using the training design matrix \code{X} as the evaluation matrix and adds no elastic net or contribution cap penalties and no box constraints. Below are sample usages with different combinations of parameters
+By default, \code{capnet()} fits Gaussian regression with an intercept, uses the training matrix for cap assessment, and applies no penalties or finite coefficient bounds. The following examples add coefficient penalties, contribution penalties, a separate evaluation matrix, and coefficient bounds in turn.
 
 \begin{Code}
-    # No regularization, same as running lm()
+    # Unpenalized Gaussian regression
     R> fit1 <- capnet(X, y, L)
     
-    # Only elastic net penalties, same as running glmnet()
+    # Elastic net penalties without contribution regularization
     R> alpha <- 0.5
     R> lambda <- 0.1
     R> fit2 <- capnet(X, y, L, alpha = alpha, lambda = lambda)
@@ -399,13 +302,13 @@ By default, the model fits a Gaussian model using the training design matrix \co
     +    gamma = gamma)
 
     # Adding box constraints
-    upper.limits <- c(rep(Inf, 5), rep(0, 5))
-    lower.limits <- c(rep(0, 5), rep(-Inf, 5))
+    R> upper.limits <- c(rep(Inf, 5), rep(0, 5))
+    R> lower.limits <- c(rep(0, 5), rep(-Inf, 5))
     R> fit5 <- capnet(X, y, L, z = Z, alpha = alpha, lambda = lambda,
     +    gamma = gamma, lower.limits = lower.limits, upper.limits = upper.limits)
 \end{Code}
 
-\code{capnet()} returns an \code{S3} object, and we have included the \code{coef} and \code{predict} functions to display the coefficients and make predictions on new design matrix data.
+The function returns an \code{S3} object with \code{coef()} and \code{predict()} methods for extracting coefficients and predicting on new covariate data.
 
 \begin{CodeChunk}
 \begin{CodeInput}
@@ -442,7 +345,8 @@ By default, the model fits a Gaussian model using the training design matrix \co
 \end{CodeOutput}
 \end{CodeChunk}
 
-An accompany function, \code{coef_path()} is used to visualize the coefficient paths along a sequence of one hyperparameter. The function will return an \code{S3} object with accompanying \code{plot()} method to visualize the coefficient paths. The resulting plots from the following example are shown in Figure~\ref{fig:paths}.
+The \code{coef_path()} function fits models along a sequence of values for one hyperparameter. Its \code{plot()} method displays the resulting coefficient paths (Figure~\ref{fig:paths}).
+
 \begin{Code}
     R> lambdas <- exp(seq(2, -5, length.out = 100))
     R> alphas <- seq(0, 1, length.out = 100)
@@ -468,14 +372,14 @@ An accompany function, \code{coef_path()} is used to visualize the coefficient p
     \label{fig:paths}
 \end{figure}
 
-The \code{walk_capnet()} function offers the ability to apply the \code{capnet()} function iteratively over observations in the evaluation set. This is useful because fitting a \pkg{capnet} model over multiple observations can produce an over-penalized model that perform worse in out-of-sample prediction tasks. The walk-forward refitting framework is also useful for time-series tasks, where data arrive sequentially. The \code{walk_capnet()} functions allows for easy sequential fitting and evaluation along the evaluation path. The interface of \code{walk_capnet()} is very similar to that of \code{capnet}, with the exception that it also takes the evaluation matrix \code{Z} as a required input and has an additional optional argument \code{walk}, which controls the step size of the iterative fitting procedure.
+The \code{walk_capnet()} function re-optimizes the model over successive slices of the evaluation matrix. Within a call, the training data $(X,y)$ remain fixed; only the evaluation rows used by the contribution penalty change. The \code{walk} argument specifies the number of evaluation rows in each slice, with a default of one. For time-series forecasting, the user must update the historical training window externally and ensure that every covariate in a slice is available when its forecasts are issued. Local fitting may avoid imposing one compromise coefficient vector across diverse scenarios, at the cost of repeated optimization.
 
 \begin{Code}
     R> walk_fit <- walk_capnet(X, y, L, Z, walk = 1, alpha = alpha,
     +    lambda = lambda, gamma = gamma)
 \end{Code}
 
-\code{walk_capnet()} also returns an \code{S3} object and has accompany \code{coef()} and \code{predict()} methods to display the sequence of coefficients and predictions with the evaluation set.
+The function returns an \code{S3} object whose \code{coef()} and \code{predict()} methods report the sequence of fitted coefficients and predictions along the evaluation path.
 
 \begin{CodeChunk}
 \begin{CodeInput}
@@ -514,7 +418,7 @@ The \code{walk_capnet()} function offers the ability to apply the \code{capnet()
 \end{CodeOutput}
 \end{CodeChunk}
 
-The \code{cv_capnet()} function implements grid-search cross-validation and has a similar signature to \code{capnet()}. It allows the user to choose the split method (the default is K-fold cross validation) and the loss metrics for measuring prediction or classification accuracy on the held-out sets.\footnote{Currently available metrics include mean-squared error (MSE), out of sample R square, logarithmic loss, brier score, and deviance.} \code{cv_capnet()} allows the user to search for the optimal $\lambda$ and $\alpha$ values individually or simultaneously.
+The \code{cv_capnet()} function searches a grid of $\lambda$ and $\alpha$ values, individually or jointly, using cross-validation. The contribution strength $\gamma$ is fixed within each call; users can compare separate calls to evaluate different values. Available metrics include MSE, out-of-sample $R^2$, logarithmic loss, Brier score, and deviance. The default random K-fold split is appropriate for exchangeable observations. Forecasting applications require a validation procedure that respects time order, with preprocessing and tuning restricted to information available at each forecast origin.
 
 \begin{figure}[h]
     \centering
@@ -527,7 +431,6 @@ The \code{cv_capnet()} function implements grid-search cross-validation and has 
     R> gamma <- 0.05
     
     # K-fold grid-search cross-validate on lambda and alpha
-    R> set.seed(123)
     R> cv_fit1 <- cv_capnet(X, y, gamma, L, K = 5)
 
     # User-specified cross-validation splits
@@ -539,7 +442,7 @@ The \code{cv_capnet()} function implements grid-search cross-validation and has 
     +    lambda = exp(seq(1, -5, length.out = 50)), alpha = 0.5)
 \end{Code}
 
-Similar to the implementation by \code{cv.glmnet()}, \code{cv_capnet()} uses warm start when searching for \code{lambda} values to cut computational costs. The \code{S3} \code{plot()} method displays the cross-validation curve with upper and lower confidence bounds for each $\lambda$ or $\alpha$ value in the regularization path. Example plots using the simulated data are presented in Figure~\ref{fig:cv_lambda}.
+As in \code{cv.glmnet()}, warm starts reduce the cost of fitting successive $\lambda$ values. The \code{plot()} method displays mean validation error and its reported variability across folds (Figure~\ref{fig:cv_lambda}).
 
 \begin{Code}
     R> plot(cv_fit1, alpha = 1)
@@ -551,7 +454,7 @@ The package also provides diagnostic tools for examining fitted \pkg{capnet} mod
 \begin{CodeInput}
     R> fit <- capnet(X, y, L, alpha = alpha, lambda = lambda, gamma = 0)
     
-    # Default uses the valuation set of the original fit
+    # Default uses the evaluation set of the original fit
     R> violations1 <- capnet_violations(fit)
 
     # User can specify a new evaluation matrix
@@ -579,7 +482,7 @@ The function \code{plot\_redistribution()} compares two fitted \pkg{capnet} mode
     \begin{subfigure}{0.49\textwidth}
         \includegraphics[width=\textwidth]{figs/contrib_redistribute.png}
     \end{subfigure}
-    \caption{Comparison of coefficient values (left panel) and average feature contributions (right panel) between capped and uncapped \pkg{capnet} models fitted on the simulated dataset. Results are generated using \code{plot\_redistribution()} applied to two fitted models with different contribution penalties. Imposing contribution caps reduces the magnitude of coefficients associated with high-impact features (e.g. $X3$, $X7$, $X8$) and redistributes predictive weight to other features, demonstrating how \pkg{capnet} enforces balanced feature influence.}
+    \caption{Comparison of coefficient values (left panel) and signed average feature contributions (right panel) between uncapped and capped \pkg{capnet} models fitted on the simulated dataset. Results are generated using \code{plot\_redistribution()} applied to two fits with different contribution penalties. The clearest differences in the displayed draw involve $X6$ and $X9$; other coefficients and mean contributions change less or remain near zero.}
     \label{fig:redistribute}
 \end{figure}
 
@@ -590,19 +493,18 @@ The function \code{plot\_redistribution()} compares two fitted \pkg{capnet} mode
     R> fit2 <- capnet(X, y, L, z = z_small, alpha = alpha, 
     +    lambda = lambda, gamma = 10)
 
-    # Side-by-side bar chart comparing feature coefficients and contributions
-    R> plot_redistribution(fit1, fit2, plot = "delta")
-
-    # Bar chart showing changes in feature coefficients and contributions
+    # Side-by-side bars of coefficients and contributions
     R> plot_redistribution(fit1, fit2, plot = "raw")
+
+    # Changes in coefficients and contributions
+    R> plot_redistribution(fit1, fit2, plot = "delta")
 \end{Code}
 
 \subsection{Extensions to Other GLM Families}\label{sec:software-families}
 
-Every function illustrated above extends unchanged to the logistic, Poisson, and gamma regression cases via the \code{family} argument; only the interpretation of contributions changes, as discussed in Section~\ref{sec:framework}. The \code{simulate\_capnet\_data()} function generates an appropriately-scaled response for any of the four supported families, rescaling the linear predictor's slope to unit standard deviation and adding a data-generating intercept so that the response lands in a numerically sensible range regardless of \code{p} or the coefficient range.
+Every function illustrated above extends unchanged to the logistic, Poisson, and Gamma regression cases via the \code{family} argument; only the interpretation of contributions changes, as discussed in Section~\ref{sec:framework}. The \code{simulate\_capnet\_data()} function generates an appropriately scaled response for any of the four supported families, rescaling the linear predictor's slope to unit standard deviation and adding a data-generating intercept so that the response lands in a numerically sensible range regardless of \code{p} or the coefficient range.
 
 \begin{Code}
-    R> set.seed(123)
     R> alpha <- 0.5; lambda <- 0.1; gamma <- 1
     R> data_pois <- simulate_capnet_data(n = 100, p = 10, m = 20,
     +     family = "poisson")
@@ -631,7 +533,7 @@ Every function illustrated above extends unchanged to the logistic, Poisson, and
 \end{CodeOutput}
 \end{CodeChunk}
 
-Because the log link is used, \code{predict(fit\_pois, newdata = Z, type = "response")} returns predictions already exponentiated onto the count scale, and the contribution cap \code{L} bounds the log-mean exactly as described in Section~\ref{sec:framework}. Fitting the logistic or gamma cases is identical apart from the \code{family} argument and the corresponding call to \code{simulate\_capnet\_data()}:
+For the Poisson fit, \code{predict(fit\_pois, newdata = Z, type = "response")} returns predictions on the count scale. Contribution ceilings apply to each feature's log-mean contribution, as described in Section~\ref{sec:framework}. Logistic and Gamma models use the same interface with the corresponding \code{family} argument:
 
 \begin{Code}
     R> data_bin <- simulate_capnet_data(n = 100, p = 10, m = 20,
@@ -650,223 +552,138 @@ Because the log link is used, \code{predict(fit\_pois, newdata = Z, type = "resp
 
 \subsection{Quantitative Finance}\label{sec:examples-finance}
 
-An important application of \pkg{capnet} arises in quantitative finance, where feature variables frequently exhibit heavy-tailed distributions and episodic extremes. In such environments, standard linear models can produce unstable and economically undesirable predictions, as a small number of extreme feature realizations may dominate the model output. From a portfolio construction perspective, this translates into concentrated exposures and fragile positions that are highly sensitive to outliers. Risk managers may be concerned with these dynamics, as they can lead to unintended bets, amplified drawdowns, and poor tail-risk properties. In practice, portfolio managers often impose explicit constraints---such as position limits, exposure caps, or risk budgets---to control the influence of individual signals. These constraints reflect a preference for diversification not only at the portfolio level but also at the level of predictive signals. However, conventional penalized regression methods (e.g., ridge or elastic net) shrink coefficients uniformly and do not directly control the realized contribution of each feature. As a result, even regularized models can produce predictions dominated by a single extreme feature when its realized value is large. The contribution-based framework implemented in \pkg{capnet} directly addresses this issue by penalizing excessive feature contributions, thereby aligning statistical estimation with practical risk management objectives. The time-series nature of financial data further necessitates rolling estimation procedures, for which the walk-forward implementation \code{walk_capnet} is particularly well suited.
+In market timing, return forecasts are often mapped into equity positions. A forecast dominated by one extreme feature can therefore make both the position's direction and its size depend heavily on that signal. If the feature is noisy or transient, a large forecast change can translate into a fragile decision. Portfolio managers commonly use position limits, exposure caps, and risk budgets to control such outcomes after the forecast is formed. Contribution penalties express a related preference within the forecasting model itself: they discourage one input from accounting for an unusually large part of the linear predictor while the coefficients are estimated. They complement downstream portfolio controls, but do not replace them or guarantee lower investment losses. The analysis below evaluates forecast accuracy and feature contributions rather than the performance of a specified trading strategy.
 
-To illustrate the empirical performance of \pkg{capnet}, we use data from the \href{https://www.kaggle.com/competitions/hull-tactical-market-prediction}{Hull Tactical Market Prediction Kaggle competition}. This dataset contains daily observations combining publicly available market data with proprietary features designed to predict excess returns of the S\&P 500. Following the variable selection of the competition’s baseline model, we construct a backtesting pipeline to evaluate alternative approaches to imposing contribution caps within a linear modeling framework. For reproducibility, a copy of this dataset is bundled with the package as \code{inst/extdata/data.csv}, and the full backtesting pipeline used in this section is provided as the package vignette \code{vignette("example_elan", package = "capnet")}.
+To illustrate the empirical performance of \pkg{capnet}, we use data from the \href{https://www.kaggle.com/competitions/hull-tactical-market-prediction}{Hull Tactical Market Prediction Kaggle competition}. This dataset contains daily observations combining publicly available market data with proprietary features designed to predict excess returns of the S\&P 500. Following the variable selection of the competition’s baseline model, we construct a backtesting pipeline to evaluate alternative approaches to imposing contribution caps within a linear modeling framework. For reproducibility, a copy of this dataset is bundled with the package as \code{inst/extdata/data.csv}, and the full backtesting pipeline used in this section is provided in \path{vignettes/paper/example_elan.Rmd}.
 
 \begin{table}[ht]
 \centering
-\begin{tabular}{lccc}
-    \hline\hline
-    Variable & Mean & Variance & Excess Kurtosis \\ 
-    \hline
-    S2 & 0.03 & 1.04 & -0.40 \\ 
-    E2 & 0.51 & 2.01 & -0.16 \\ 
-    E3 & 0.36 & 2.27 & -0.32 \\ 
-    P9 & 0.39 & 0.15 & -1.53 \\ 
-    S1 & 0.24 & 2.00 & 1.13 \\ 
-    S5 & 0.03 & 1.27 & 14.56 \\ 
-    I2 & -0.51 & 1.57 & 1.66 \\ 
-    P8 & 1.55 & 0.50 & 2.87 \\ 
-    P10 & 1.47 & 0.66 & 0.34 \\ 
-    P12 & -0.01 & 1.21 & 11.01 \\ 
-    P13 & 0.51 & 0.08 & -1.11 \\
-    \hline\hline
-\end{tabular}
+\input{tables/finance-moments.tex}
 \caption{Summary statistics of selected variables from the Kaggle dataset. Features $S5$ and $P12$ exhibit substantial positive kurtosis.}
 \label{tab:variable}
 \end{table}
 
-Table~\ref{tab:variable} reports summary statistics for selected variables. While most variables exhibit moderate dispersion, $S5$ and $P12$ display pronounced leptokurtosis. These distributional properties imply that extreme realizations occur more frequently than would be expected under Gaussian assumptions. In a standard linear model, such features can exert disproportionate influence on predictions, particularly when extreme values arise out of sample but are not well represented in the training data. This mismatch between in-sample estimation and out-of-sample realization is a key source of model instability and motivates the use of contribution-based regularization.
+Table~\ref{tab:variable} summarizes selected covariates. Features $S5$ and $P12$ have substantial positive sample excess kurtosis, indicating occasional large deviations relative to their typical variation. That observation does not establish that every extreme value is unreliable. It does show why average covariate scales alone may miss the circumstances in which a forecast depends heavily on a particular feature. The backtest therefore examines realized contributions alongside forecast accuracy, rather than treating sample tail behavior as sufficient evidence of a predictive benefit from capping.
 
-We consider three modeling approaches: (i) an uncapped baseline, (ii) a post-fit capping method, and (iii) the walk-forward \pkg{capnet} approach. At each monthly refit date, models are estimated using a 20-year rolling training window and used to generate predictions for the subsequent month. Given training data \code{x_train}, \code{y_train}, test data \code{x_test}, and a specified contribution cap vector \code{L}, we estimate \code{capnet} or \code{walk_capnet} models with \code{alpha = 0.5} and a regularization parameter \code{lambda} selected via \code{cv.glmnet}. For the post-fit capping approach, we first estimate the uncapped model (equivalently, \code{capnet} with \code{gamma = 0}) and then apply contribution caps to the fitted model ex post. While this guarantees that realized contributions satisfy the cap constraint, it does not allow the model to adjust coefficients in response to the constraint during estimation. In contrast, \pkg{capnet} incorporates the cap penalty directly into the objective function, allowing the model to reallocate weight across features in a manner that balances predictive accuracy with contribution control. The backtest spans January 1, 2020 through February 13, 2026. For the walk-forward specification, we evaluate multiple values of the penalty parameter \code{gamma} to assess sensitivity to the strength of the cap penalty. Table~\ref{tab:elan_result} reports the average out-of-sample $R^2$ across specifications.
+We consider three modeling approaches: (i) an uncapped baseline, (ii) a post-fit capping method, and (iii) the walk-forward \pkg{capnet} approach. At each monthly refit date, models are estimated using a 25-year rolling training window and used to generate predictions for the subsequent month. Given training data \code{x_train}, \code{y_train}, test data \code{x_test}, and a specified contribution cap vector \code{L}, we estimate \code{capnet} or \code{walk_capnet} models with \code{alpha = 0.5} and a regularization parameter \code{lambda} selected via \code{cv.glmnet}. For the post-fit capping approach, we first estimate the uncapped model (equivalently, \code{capnet} with \code{gamma = 0}) and then apply contribution caps to the fitted model \textit{ex post}. While this guarantees that realized contributions satisfy the cap constraint, it does not allow the model to adjust coefficients in response to the constraint during estimation. In contrast, \pkg{capnet} incorporates the cap penalty directly into the objective function, allowing the model to reallocate weight across features in a manner that balances predictive accuracy with contribution control. The backtest spans January 1, 2020 through February 13, 2026. For the walk-forward specification, we evaluate multiple values of the penalty parameter \code{gamma} to assess sensitivity to the strength of the cap penalty.
+
+The supplied helper sets ceilings to $L_j=(7/350)|\operatorname{cor}(X_{\cdot j},y)|$, using complete training observations. This correlation-based heuristic differs from the univariate Poisson-slope rule used in the web application. Within each monthly training window, \code{cv.glmnet()} selects \code{lambda.min} using ten random folds; the selected $\lambda$ is shared across the contribution-penalty specifications. Thus, the outer monthly evaluation is chronological, while the inner tuning procedure is not a forward-chaining validation.
+
+Both applications use the squared-error out-of-sample score implemented by \code{calc_oos_r2()}:
+\begin{equation}
+R^2_{\mathrm{OOS}}=1-
+\frac{\sum_{t=2}^{T}(y_t-\hat y_t)^2}
+{\sum_{t=2}^{T}(y_t-\bar y_{t-1})^2},
+\qquad \bar y_{t-1}=\frac{1}{t-1}\sum_{s=1}^{t-1}y_s.
+\label{eq:oos-r2}
+\end{equation}
+Here $t$ indexes ordered evaluation observations. The benchmark mean uses preceding responses within the evaluation period, rather than the initial training sample, and the first evaluation observation is omitted from scoring. The table reports one pooled score per specification, not an average of monthly $R^2$ values. Rolling scores restrict the two error sums to the displayed window while retaining the expanding benchmark. Table~\ref{tab:elan_result} reports the finance results.
 
 \begin{table}[h]
     \centering
-    \begin{tabular}{l|c|c}
-    \hline\hline\\[-2.7ex]
-        Method & $\gamma$ & OOS $R^2$ \\
-        \hline
-        Uncapped & & 0.00706 \\
-        Post-fit Cap & & 0.00573 \\
-        Capnet & 0.1 & 0.00716 \\
-        Capnet & 1 & 0.00762 \\
-        Capnet & 10 & 0.00762 \\
-        Capnet & 100 & 0.00766\\
-    \hline\hline
-    \end{tabular}
-    \caption{Average out-of-sample $R^2$ from the backtest experiment (January 2020 to February 2026) on the Kaggle dataset. The \pkg{capnet} models achieve performance comparable to or exceeding the uncapped model while substantially outperforming the post-fit approach, indicating that incorporating contribution constraints during estimation provides a more effective approach in accounting for feature influence.}
+    \input{tables/finance-scores.tex}
+    \caption{Pooled out-of-sample $R^2$ from the backtest experiment (January 2020 to February 2026) on the Kaggle dataset. All reported walk-forward specifications exceed the uncapped and post-fit scores in this comparison; the absolute improvement over the uncapped benchmark is small.}
     \label{tab:elan_result}
 \end{table}
 
-To provide a more granular comparison over time, Figure~\ref{fig:oosrsq} presents rolling out-of-sample $R^2$ computed over a 252-day window. The uncapped model (blue) exhibits substantial performance volatility, including large negative deviations that correspond to periods where extreme feature realizations dominate predictions. The post-fit capping approach reduces these downside outcomes and improves robustness during periods of broad underperformance, but at the cost of attenuating strong predictive signals when they are present. In contrast, the walk-forward \pkg{capnet} model achieves a more favorable trade-off. By incorporating contribution control during estimation, it selectively dampens the influence of extreme realizations while preserving informative variation in the features. This leads to a smoother performance profile with fewer large drawdowns and more consistentout-of-sample $R^2$. From a portfolio perspective, this corresponds to improved stability and more reliable signal extraction over time.
+The pooled scores in Table~\ref{tab:elan_result} favor all four reported walk-forward penalty strengths, although the improvements over the uncapped baseline are small in absolute $R^2$ units. Post-fit capping scores below the uncapped baseline. A pooled score can conceal when those differences arise, so Figure~\ref{fig:oosrsq} compares rolling out-of-sample $R^2$ over 252-observation windows. The uncapped model has negative deviations in some periods. Post-fit capping reduces some of these deviations but also weakens performance in other periods, consistent with the possibility that mechanical clipping sometimes removes useful signal. The displayed walk-forward fit has a smoother profile, though the curves remain close over substantial stretches. These are descriptive forecast results; they do not establish a reduction in portfolio drawdowns.
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.75\linewidth]{figs/oosrsq.png}
-    \caption{Rolling out-of-sample $R^2$ computed over a 252-day window for three models: uncapped (blue), post-fit capped (red), and walk-forward \pkg{capnet} (green). The uncapped model exhibits substantial performance volatility, including large negative deviations certain periods. The post-fit approach achieves more stable predictive power but attenuates strong signals. The walk-forward \pkg{capnet} model achieves a smoother and more stable performance profile.}
+    \includegraphics[width=0.9\linewidth]{figs/oosrsq.png}
+    \caption{Rolling out-of-sample $R^2$ over 252 scored observations for uncapped (blue), post-fit capped (red), and walk-forward \pkg{capnet} with $\gamma=0.1$ (green). All series use the same expanding-mean benchmark. The axis begins at the first date with a complete rolling window.}
     \label{fig:oosrsq}
 \end{figure}
 
-The performance gains observed for \pkg{capnet} can be traced to its ability to regulate feature-level contributions rather than merely shrinking coefficients. In the uncapped model, a small number of features have concentrated contributions, resulting in unstable predictions and large drawdowns in performance. Post-fit capping mitigates this effect by truncating contributions ex post, but does not allow the model to adjust its coefficients accordingly. In contrast, \pkg{capnet} incorporates contribution constraints directly into the estimation problem, enabling the model to redistribute predictive weight across features. This leads to a more balanced contribution structure and improved stability over time.
+To examine the contribution behavior associated with these forecasts, Figure~\ref{fig:max_contrib} reports the maximum absolute feature contribution at each prediction date.
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.75\linewidth]{figs/max_contributions.png}
+    \includegraphics[width=0.9\linewidth]{figs/max_contributions.png}
     \caption{Time series of the maximum absolute feature contribution at each out-of-sample prediction for the uncapped (blue), post-fit capped (red), and walk-forward \pkg{capnet} (green) models. The post-fit approach enforces a hard cap, truncating contributions at the specified limit. In contrast, \pkg{capnet} imposes a soft constraint via the penalty parameter $\gamma$, reducing extreme contributions while preserving flexibility when large contributions are informative.}
     \label{fig:max_contrib}
 \end{figure}
 
-Figure~\ref{fig:max_contrib} plots the contribution of the feature with the largest absolute contribution at each prediction point. By construction, the post-fit capping approach enforces a hard constraint, keeping contributions at or within the cap boundary $L$. In contrast, \pkg{capnet} imposes a soft constraint through the penalty parameter $\gamma$. For example, with $\gamma = 0.1$, contributions are moderated relative to the uncapped model but are not mechanically truncated at the cap. This allows the model to retain flexibility when extreme contributions are informative, while still discouraging excessive concentration.
+Post-fit capping truncates each contribution at its feature-specific ceiling. The walk-forward fit instead applies a soft penalty: contributions can remain above their ceilings, as the $\gamma=0.1$ example illustrates. This distinction is important when comparing the forecast accuracy of the two approaches.
 
-To further illustrate how \pkg{capnet} redistributes feature contributions, Table~\ref{tab:contributions} reports a snapshot for May 24, 2023. In the uncapped model, features E2 and P8 violate the contribution caps. The post-fit capping approach enforces the constraint mechanically, reducing these contributions without adjusting other coefficients. In contrast, the walk-forward \pkg{capnet} model modifies multiple coefficients simultaneously, redistributing contributions across features. This reflects the model’s ability to internalize the constraint and solve a constrained optimization problem rather than applying an ex post correction.
+Table~\ref{tab:contributions} compares feature contributions on May 24, 2023. The uncapped contributions of $E2$ and $P8$ exceed their feature-specific ceilings. Post-fit capping changes those two contributions while leaving the other displayed values unchanged. The walk-forward fit also changes several other contributions, including $P10$, whose uncapped contribution is zero on that date. Its value for $P8$ lies between the uncapped and post-fit values, illustrating that a soft penalty need not clip a contribution exactly to its ceiling. The final row sums all eleven slope contributions, excluding the intercept. It shows a different slope component of the forecast under each procedure, rather than a mere truncation of one fixed linear predictor.
 
 \begin{table}[h]
     \centering
-    \begin{tabular}{lccc}
-    \hline\hline
-        Feature & Uncapped & Post-Fit Cap & Walk-forward \pkg{capnet} \\
-    \hline
-        S2 & $-3.439$ & $-3.439$ & $-3.362$ \\
-        E2 & $-1.395$ & $-1.118$ & $-0.664$ \\
-        E3 & $0$ & $0$ & $0$ \\
-        P9 & $0.124$ & $0.124$ & $0.079$ \\
-        S1 & $-0.156$ & $-0.156$ & $-0.028$ \\
-        S5 & $0.073$ & $0.073$ & $0.073$ \\
-        I2 & $-4.863$ & $-4.863$ & $-5.249$ \\
-        P8 & $-16.07$ & $-7.707$ & $-9.443$ \\
-        P10 & $0$ & $0$ & $-1.054$ \\
-        P12 & $0.743$ & $0.743$ & $0.897$ \\
-        P13 & $-0.641$ & $-0.641$ & $-0.677$ \\
-    \hline\hline
-    \end{tabular}
-    \caption{Feature-level contributions for the uncapped, post-fit capped, and walk-forward \pkg{capnet} models ($\gamma=0.1$) on May 24, 2023. All values are scaled by $10^4$ for readability. In the uncapped model, features such as $E2$ and $P8$ exceed the contribution ceilings. The post-fit method enforces cap mechanically without adjusting other coefficients. In contrast, the \pkg{capnet} model redistributes contributions across multiple features.}
+    \input{tables/finance-snapshot.tex}
+    \caption{Feature contributions on May 24, 2023 for the uncapped, post-fit capped, and walk-forward models ($\gamma=0.1$), scaled by $10^4$. The sum row uses unrounded fitted contributions and excludes the intercept.}
     \label{tab:contributions}
 \end{table}
 
-From a computational perspective, \code{capnet} achieves runtime comparable to \code{glmnet} under the same specification. Table~\ref{tab:runtime} reports the total runtime of the monthly refit backtesting procedure for three methods. All experiments were performed on a machine with an Intel i7-7700 CPU (4 cores, 3.6 GHz) and 32 GB RAM. At each refit date, both the \code{glmnet} and \code{capnet} approaches perform a single cross-validation search to select $\lambda$, followed by one model fit using the full training sample. In contrast, the \code{walk\_capnet} approach also performs a cross-validation step at each refit date but subsequently refits the model sequentially for each out-of-sample observation. This repeated fitting leads to a higher overall computational cost.
+Table~\ref{tab:runtime} reports the median and range of three serial runs of the complete monthly backtest, including monthly cross-validation and output assembly. Both contribution-penalized procedures use $\gamma=0.1$; the joint fit assesses the full monthly covariate matrix and the walk-forward fit uses one row per optimization. The runs use the same tuning defaults. Installation and initial package loading are excluded. Requested OpenMP and BLAS thread limits are one. The recorded R version, platform, package versions, and source/input checksums accompany the result files. These timings characterize this run and should not be interpreted as portable solver rankings.
 
 \begin{table}[h]
     \centering
-    \begin{tabular}{lc}
-    \hline\hline
-        Model & Runtime (secs) \\
-    \hline
-        \code{glmnet} & 13.06 \\
-        \code{capnet} & 16.05 \\
-        \code{walk_capnet} & 58.87 \\
-    \hline\hline
-    \end{tabular}
-    \caption{Total runtime (in seconds) of the monthly refit backtesting procedure for each method. Both \code{glmnet} and \code{capnet} perform a single cross-validation step and model fit at each refit date, while \code{walk\_capnet} additionally refits the model sequentially for each out-of-sample observation, resulting in higher computational cost.}
+    \input{tables/runtime.tex}
+    \caption{Elapsed time for the complete finance backtest: median and range in seconds across three serial repetitions. The \code{capnet} and \code{walk\_capnet} runs both use an active contribution penalty ($\gamma=0.1$), while \code{glmnet} uses only coefficient regularization.}
     \label{tab:runtime}
 \end{table}
 
 \subsection{Web Traffic}\label{sec:examples-web}
 
-A second application of \pkg{capnet} arises in forecasting aggregate web traffic from a panel of individual, heavy-tailed content-level pageview series. Article-level popularity on the web is well documented to be Zipf-like and heavy-tailed. On any given day, small number of pages can go viral and receive orders of magnitude more traffic than usual \citep{crovella1997}. Within this setting, conventional penalization tools such as $\ell_1$ and $\ell_2$ norms do little to constrain the spikes in feature level contributions that can dominate the forecast and hamper predictive performance.
+The second application forecasts aggregate web traffic from article-level pageview series. Pageviews can change abruptly after a news event, a viral post, or a shift in public interest. Such episodes create extreme predictor values that may be poorly represented in a rolling training window. In a Poisson log-link model, an individual contribution enters the log-mean: adding a contribution of $c$ multiplies the conditional mean by $e^c$ if all other terms are held fixed. A large positive contribution can therefore amplify a predicted count substantially, and even a coefficient that appears modest on ordinary days can matter greatly on a high-traffic day.
 
-To illustrate this, we use daily English Wikipedia pageviews (January 1, 2022 through December 31, 2024) for 30 widely-read articles spanning major technology companies, artificial-intelligence and cryptocurrency topics, and prominent public figures, obtained from the public Wikimedia Pageviews REST API. The response is next-day total pageviews summed across all 30 articles; the covariates are each article's own pageviews (in thousands of views) on the current day. Table~\ref{tab:wiki_variable} reports summary statistics for a representative subset of the covariate panel. Most articles here exhibit extreme leptokurtosis. \code{Microsoft} and \code{Youtube} in particular have excess kurtosis several orders of magnitude larger than any variable in Table~\ref{tab:variable}. For reproducibility, the processed daily panel is bundled with the package as \code{inst/extdata/wiki_traffic.csv}, and the full backtesting pipeline used in this section is provided as the package vignette \code{vignette("example_wiki", package = "capnet")}.
+To illustrate this, we use daily English Wikipedia pageviews (January 1, 2022 through December 31, 2024) for 30 widely-read articles spanning major technology companies, artificial-intelligence and cryptocurrency topics, and prominent public figures, obtained from the public Wikimedia Pageviews REST API. The response is next-day total pageviews summed across all 30 articles; the covariates are each article's own pageviews (in thousands of views) on the current day. Table~\ref{tab:wiki_variable} reports summary statistics for a representative subset of the covariate panel. Several articles exhibit large positive sample excess kurtosis. In particular, \code{Microsoft} and \code{YouTube} have much larger values than the finance covariates in Table~\ref{tab:variable}. The processed panel is bundled as \path{inst/extdata/wiki_traffic.csv}. The reproducible backtest is in \path{vignettes/paper/example_wiki.Rmd}.
 
 \begin{table}[ht]
 \centering
-\begin{tabular}{lccc}
-    \hline\hline
-    Variable & Mean & Variance & Excess Kurtosis \\
-    \hline
-    Google & 33.13 & 184.71 & 25.19 \\
-    Tesla & 8.46 & 10.93 & 37.77 \\
-    Nvidia & 5.61 & 37.21 & 69.74 \\
-    ChatGPT & 66.75 & 6108.05 & 2.06 \\
-    Sony & 3.34 & 0.93 & 113.81 \\
-    Reddit & 6.82 & 10.61 & 54.99 \\
-    Elon Musk & 56.71 & 3269.33 & 101.26 \\
-    Sam Altman & 6.55 & 323.40 & 210.06 \\
-    Microsoft & 9.10 & 229.51 & 1034.96 \\
-    Youtube & 132.35 & 15374.56 & 556.32 \\
-    \hline\hline
-\end{tabular}
+\input{tables/wiki-moments.tex}
 \caption{Summary statistics (daily pageviews, in thousands) for selected articles in the web-traffic dataset. Several articles exhibit pronounced positive excess kurtosis, reflecting occasional viral spikes far outside their typical range.}
 \label{tab:wiki_variable}
 \end{table}
 
-We forecast next-day total pageviews with a Poisson log-link model, using a rolling one-year training window refit monthly and evaluated out-of-sample from January 1, 2023 through December 31, 2024. To isolate the effect of the contribution cap alone, we forgo the elastic-net variable selection entirely (\code{lambda = 0}). 
+We use the Poisson log-link loss as a working objective for the conditional mean, without claiming a calibrated Poisson predictive distribution. Models use a rolling one-year training window refit monthly. Evaluation covariates run from January 1, 2023 through December 30, 2024, with next-day targets through December 31, 2024. We set \code{lambda = 0} to isolate contribution regularization; $\alpha$ then has no effect. Ceilings are three times the absolute slopes from separate univariate Poisson regressions fitted on the training data, following the supplied vignette. We retain \code{walk = 5} for computational efficiency, treating five consecutive daily rows as a week-like conditional batch. Slices restart each month, include weekends, and may end with fewer than five rows. All covariates in a slice enter its contribution penalty jointly, while responses remain excluded. This is a conditional comparison given the batch covariates; it is neither a weekly aggregate target nor a five-day-ahead forecast issued with only information available on the first day. Daily next-day errors are still used for scoring. Ceiling calibration remains a scale-dependent heuristic.
 
-The Poisson log-likelihood scales with the (very large) raw pageview counts, we set \code{alpha = 0} and forgo elastic-net selection entirely (\code{lambda = 0}), so that the comparison isolates the effect of the contribution cap alone. Contribution ceilings are computed analogously to the finance example, as a multiple of each feature's univariate regression coefficient with the response---here a univariate Poisson generalized linear model slope in place of the ordinary least squares slope. As in Section~\ref{sec:examples-finance}, we compare an uncapped baseline, a post-fit capping method, and the walk-forward \pkg{capnet} approach across a range of $\gamma$ values. Table~\ref{tab:wiki_result} reports the out-of-sample pseudo-$R^2$ (relative to an expanding historical-mean benchmark) across specifications.
+As in the finance example, we compare uncapped, post-fit capped, and walk-forward fits over a grid of $\gamma$ values. Table~\ref{tab:wiki_result} reports out-of-sample $R^2$ using the squared-error score in Equation~\ref{eq:oos-r2}, rather than a deviance-based pseudo-$R^2$. Penalty strengths are not directly comparable across applications because the relative scales of the likelihood and contribution penalty differ.
 
 \begin{table}[h]
     \centering
-    \begin{tabular}{l|c|c}
-    \hline\hline\\[-2.7ex]
-        Method & $\gamma$ & OOS pseudo-$R^2$ \\
-        \hline
-        Uncapped & & $-9461$ \\
-        Post-fit Cap & & $-1.43$ \\
-        Capnet & $10$ & $-602$ \\
-        Capnet & $100$ & $-0.066$ \\
-        Capnet & $1{,}000$ & $0.408$ \\
-        Capnet & $10{,}000$ & $\mathbf{0.438}$ \\
-        Capnet & $100{,}000$ & $0.411$ \\
-    \hline\hline
-    \end{tabular}
-    \caption{Average out-of-sample pseudo-$R^2$ from the backtest experiment (January 2023 to December 2024) on the Wikipedia pageview dataset. The uncapped model is catastrophically unstable, driven by a single extreme out-of-sample prediction (see Figure~\ref{fig:wiki_oosrsq}). Because the raw covariate scale here is far larger than in the finance example, a much larger $\gamma$ is needed before the contribution-cap penalty meaningfully competes with the likelihood term; small $\gamma$ values (e.g., $10$) are insufficient to stabilize the fit, while sufficiently large values ($\gamma \geq 1{,}000$) restore a positive out-of-sample pseudo-$R^2$.}
+    \input{tables/wiki-scores.tex}
+    \caption{Pooled out-of-sample $R^2$ from the backtest experiment (January 2023 to December 2024) on the Wikipedia pageview dataset. The uncapped score is dominated by a single extreme out-of-sample prediction. The likelihood and penalty have different relative scales from the finance application. In the reported grid, scores become positive for $\gamma\geq1{,}000$.}
     \label{tab:wiki_result}
 \end{table}
 
-The uncapped model here extremely unstable. A single covariate combination lands far outside its training distribution and produces an implausible next-day forecast, driving the uncapped pseudo-$R^2$ deeply negative. Post-fit capping clips the offending contribution after the fact but does not allow the coefficients to adjust, and so it does not offer a satisfiable solution. The walk-forward \pkg{capnet} model, which incorporates the contribution cap directly into estimation, is the only approach that achieves a positive out-of-sample pseudo-$R^2$, provided $\gamma$ is large enough to bind.
+The uncapped model produces an extreme forecast that drives its aggregate $R^2$ deeply negative. Because the score sums squared errors over the full evaluation period, a single sufficiently large error can dominate it; the extreme score does not mean that every uncapped forecast is poor. Post-fit capping reduces this error but still gives a negative pooled score. Among the reported specifications, contribution-penalized fits attain positive scores for $\gamma\geq1{,}000$, with the highest value at $\gamma=10{,}000$. The much smaller penalty strengths do not control the extreme error sufficiently in this experiment. The vignette selects the displayed specification retrospectively by maximizing the evaluation-period score over this grid. This illustrates sensitivity to penalty strength; it does not provide an independently validated choice for future data.
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.75\linewidth]{figs/wiki_oosrsq.png}
-    \caption{Rolling out-of-sample pseudo-$R^2$ computed over a 90-day window for three models: uncapped (blue), post-fit capped (red), and walk-forward \pkg{capnet} with $\gamma=10{,}000$ (green). The $y$-axis is truncated at $-3$ for readability; the uncapped model's rolling pseudo-$R^2$ reaches a minimum of approximately $-212{,}135$ in mid-2023. The walk-forward \pkg{capnet} model is comparatively stable from the start of the evaluation window, while both the uncapped and post-fit models take much of 2023 to recover.}
-    \label{fig:wiki_oosrsq}
-\end{figure}
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.75\linewidth]{figs/wiki_max_contributions.png}
-    \caption{Time series of the maximum absolute feature contribution (on the log-mean scale) at each out-of-sample prediction for the uncapped (blue), post-fit capped (red), and walk-forward \pkg{capnet} with $\gamma=10{,}000$ (green) models. Because contributions here enter through a log link, a maximum contribution near $1$ corresponds to an $e^1 \approx 2.7\times$ multiplicative swing in the predicted count from a single feature---large excursions in the uncapped series correspond directly to the instability in Figure~\ref{fig:wiki_oosrsq}.}
+    \includegraphics[width=0.9\linewidth]{figs/wiki_max_contributions.png}
+    \caption{Maximum absolute feature contribution on the log-mean scale at each prediction date for the uncapped (blue), post-fit capped (red), and five-row conditional-batch \pkg{capnet} ($\gamma=10{,}000$; green) models. All three series share one logarithmic vertical axis; tick labels show untransformed contribution magnitudes. A contribution of magnitude 1 changes the conditional mean by a factor of $e$ or $e^{-1}$, depending on its sign, with other terms fixed.}
     \label{fig:wiki_max_contrib}
 \end{figure}
 
-To further illustrate how \pkg{capnet} redistributes feature contributions, Table~\ref{tab:wiki_contributions} reports a snapshot for March 14, 2023, the single day responsible for the uncapped model's worst out-of-sample blowup. A spike in \code{Youtube}'s same-day pageviews, relative to that fit's training distribution, pushes its uncapped log-mean contribution to nearly $7$---orders of magnitude larger than any other feature, and, because the response enters on the log scale, corresponding to an astronomically large multiplicative forecast error. The post-fit approach truncates this single contribution mechanically without adjusting any other coefficient. In contrast, the walk-forward \pkg{capnet} model redistributes predictive weight across several features simultaneously (most notably \code{ChatGPT} and \code{Sam Altman}), reflecting a genuinely re-estimated fit rather than a post-hoc correction.
+Table~\ref{tab:wiki_contributions} examines March 14, 2023, the date of the largest uncapped squared forecast error. The uncapped \code{YouTube} contribution to the log-mean is 6.915, far above the other displayed features on that date. Relative to omitting that contribution with all other terms fixed, it multiplies the conditional mean by approximately $e^{6.915}$. Post-fit clipping reduces the \code{YouTube} contribution to 0.001 without changing the fitted coefficients or intercept. The displayed penalized fit instead re-estimates coefficients using the five-row batch's covariates; its \code{YouTube} contribution is 0.025, while contributions from \code{ChatGPT}, \code{Microsoft}, and \code{Sam Altman} also differ from the uncapped fit. This snapshot illustrates redistribution across features, but it is a log-mean decomposition for one date, not an additive decomposition of count-scale forecast error.
 
 \begin{table}[h]
     \centering
-    \begin{tabular}{lccc}
-    \hline\hline
-        Feature & Uncapped & Post-Fit Cap & Walk-forward \pkg{capnet} \\
-    \hline
-        Google & $0.065$ & $0.005$ & $0.011$ \\
-        Microsoft & $-0.046$ & $-0.046$ & $0.055$ \\
-        Tesla & $0.051$ & $0.051$ & $0.053$ \\
-        Nvidia & $-0.029$ & $-0.029$ & $-0.038$ \\
-        ChatGPT & $0.365$ & $0.004$ & $0.105$ \\
-        Netflix & $0.150$ & $0.030$ & $0.048$ \\
-        Sony & $0.080$ & $0.080$ & $0.068$ \\
-        Elon Musk & $0.016$ & $0.003$ & $0.008$ \\
-        Sam Altman & $0.004$ & $0.004$ & $0.067$ \\
-        Youtube & $6.915$ & $0.001$ & $0.025$ \\
-    \hline\hline
-    \end{tabular}
-    \caption{Feature-level contributions (log-mean scale) for the uncapped, post-fit capped, and walk-forward \pkg{capnet} ($\gamma=10{,}000$) models on March 14, 2023. In the uncapped model, \code{Youtube}'s contribution exceeds every other feature by more than an order of magnitude. The post-fit method truncates this single contribution mechanically; the \pkg{capnet} model instead redistributes weight across multiple features, including \code{ChatGPT} and \code{Sam Altman}, whose coefficients were essentially unused by the uncapped fit.}
+    \input{tables/wiki-snapshot.tex}
+    \caption{Selected log-mean contributions on March 14, 2023 for the uncapped, post-fit capped, and five-row conditional-batch models. The displayed penalized specification is the retrospective full-window grid winner. The sum covers only these ten displayed features and excludes the other twenty features and the intercept.}
     \label{tab:wiki_contributions}
 \end{table}
 
-As a robustness check on this result, we repeat the backtest restricted to calendar year 2024 only, which excludes the March 2023 event entirely. Over this shorter window the uncapped model is no longer catastrophic (OOS pseudo-$R^2 \approx 0.540$), but the walk-forward \pkg{capnet} model still achieves a modest, consistent improvement (OOS pseudo-$R^2 \approx 0.569$ at $\gamma = 10{,}000$), while post-fit capping is the weakest approach throughout (OOS pseudo-$R^2 \approx -1.11$). This indicates that the benefit of \pkg{capnet} is not solely an artifact of avoiding one extreme event. Even absent large outlier event, incorporating the contribution cap directly into estimation yields a systematically more reliable fit than either the uncapped or post-fit alternative.
+As a check on sensitivity to the 2023 outlier, we also score the saved forecasts using only 2024 covariate dates. The 2024-only score is 0.569 for the displayed penalized fit, compared with 0.540 for the uncapped model and $-1.113$ for post-fit capping. The uncapped result is no longer dominated by the March 2023 event, while the displayed penalized fit still has a modestly higher score. This comparison recomputes the expanding benchmark within 2024; it does not refit the models or select a new penalty strength on 2024 data. It remains conditional on five-row covariate batches, and the full per-specification scores are exported alongside the full-period results.
 
+All numerical application tables and figures are generated from the saved experiment objects by \path{vignettes/paper/export_results.R}. Running \code{bash tools/reproduce\_paper.sh} from the repository root installs the current package source into an isolated library, executes the simulation and empirical experiments, saves session metadata and input/source checksums, and rebuilds the reports and manuscript. Numerical diagnostics record non-finite predictions, unsuccessful ordinary-fit stops, and any automatic reductions of the requested walk-forward penalty.
+
+\clearpage
 \section{Conclusion}\label{sec:conclusion}
 
-This paper introduced \pkg{capnet}, an \proglang{R} package for fitting generalized linear models with contribution-capped regularization. The proposed framework extends classical penalized regression methods by directly constraining the realized contributions of covariates to the linear predictor. By shifting the focus of regularization from coefficients to feature-level influence, \pkg{capnet} addresses a class of modeling problems in which extreme covariate realizations can disproportionately affect predictions.
+This paper introduces \pkg{capnet}, an \proglang{R} package for fitting generalized linear models with contribution-capped regularization. The proposed framework extends classical penalized regression methods by directly constraining the realized contributions of covariates to the linear predictor. By shifting the focus of regularization from coefficients to feature-level influence, \pkg{capnet} addresses a class of modeling problems in which extreme covariate realizations can disproportionately affect predictions.
 
-The contribution-cap formulation integrates naturally with generalized linear models and yields a convex optimization problem that can be efficiently solved using limited-memory quasi-Newton methods. The ability to specify an evaluation matrix distinct from the training data further enhances flexibility, allowing users to enforce stability not only in-sample but also in stress scenarios or anticipated deployment environments. The package provides a practical implementation of this framework, including tools for model fitting, cross-validation, sequential estimation, and diagnostic analysis, with an interface designed to be consistent with established workflows.
+The contribution-cap formulation integrates naturally with generalized linear models and yields a convex optimization problem that can be efficiently solved using limited-memory quasi-Newton methods. The ability to specify an evaluation matrix distinct from the training data further enhances flexibility, allowing users to enforce stability not only in-sample but also in anticipated stress scenarios. The package provides a practical implementation of this framework, including tools for model fitting, cross-validation, sequential estimation, and diagnostic analysis, with an interface designed to be consistent with established workflows.
 
 Empirical results across two distinct domains---a Gaussian quantitative finance application and a Poisson web-traffic forecasting application---demonstrate that contribution-based regularization can improve predictive stability and performance in settings with heavy-tailed covariates. In particular, \pkg{capnet} reduces the dominance of individual covariates by redistributing predictive weight across features, leading to smoother out-of-sample performance and fewer extreme deviations. This benefit was most dramatic in the web-traffic application, where an uncapped model's forecast was occasionally dominated by a single viral covariate to catastrophic effect, but persisted even after removing that extreme scenario, indicating that the gains from \pkg{capnet} are not solely an artifact of avoiding rare events. Compared to post-hoc capping approaches, which enforce constraints after estimation, \pkg{capnet} incorporates these constraints directly into the optimization problem, resulting in a more coherent and effective trade-off between robustness and predictive accuracy.
 
-Several limitations and directions for future research remain. The selection of contribution caps requires domain knowledge or heuristic procedures, and developing principled, data-driven approaches for tuning these parameters is an important area for further work. In addition, while the current implementation scales well to moderate evaluation sets, extending the framework to very large or streaming evaluation matrices may require additional computational strategies. Finally, further exploration of the relationship between contribution-based regularization and other robustness frameworks, such as distributionally robust optimization, may yield useful theoretical and practical insights.
+Several limitations and directions for future research remain. The selection of contribution caps requires domain knowledge or heuristic procedures. Developing principled, data-driven approaches for tuning these parameters is an important area for further work. In addition, while the current implementation scales well to moderate evaluation sets, extending the framework to very large or streaming evaluation matrices may require additional computational strategies. Finally, further exploration of the relationship between contribution-based regularization and other robustness frameworks, such as distributionally robust optimization, may yield useful theoretical and practical insights.
 
 Overall, \pkg{capnet} expands the toolkit of penalized regression by introducing a new dimension of control over model behavior. By aligning statistical estimation with practical constraints on covariate influence, it provides a flexible and interpretable framework for applications in which stability, robustness, and feature-level interpretability are of central importance.
 
-\newpage
+\clearpage
 \bibliography{refs}
 
 \end{document}
