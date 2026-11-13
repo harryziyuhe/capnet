@@ -1,378 +1,119 @@
 ---
-title: "Market Timing Model Example"
-author: "Harry He"
-date: "2026-03-16"
+title: "Market timing: reproducible contribution-penalty comparison"
 output: rmarkdown::html_vignette
-bibliography: references.bib
+params:
+  rerun: false
 vignette: >
-  %\VignetteIndexEntry{Market Timing Model Example}
+  %\VignetteIndexEntry{Market timing: reproducible contribution-penalty comparison}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
-header-includes:
-  - \usepackage{makecell}
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
-# Core package (required)
-library(capnet)
-
-# Optional packages for vignette
-needed <- c(
-  "glmnet", "lbfgs", "xtable", "ggplot2",
-  "dplyr", "tidyr", "purrr", "lubridate", "zoo"
-)
-
-missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
-
-if (length(missing) > 0) {
-  knitr::opts_chunk$set(eval = FALSE)
-  message(
-    "Optional packages not installed: ",
-    paste(missing, collapse = ", "),
-    ". Code chunks will not be evaluated."
-  )
-} else {
-  library(glmnet)
-  library(lbfgs)
-  library(xtable)
-  library(ggplot2)
-  library(dplyr)
-  library(tidyr)
-  library(purrr)
-  library(lubridate)
-  library(zoo)
-}
-
-if (length(missing) == 0) {
-  source("helpers.R", local = knitr::knit_global())
-}
+knitr::opts_chunk$set(echo=TRUE,message=FALSE)
+library(capnet); library(dplyr); library(tidyr); library(lubridate)
+repo_root <- normalizePath("../..")
+source("helpers.R"); source("experiments.R")
+results_dir <- file.path(repo_root,"manuscript/results")
+results <- if(params$rerun) paper_finance() else readRDS(file.path(results_dir,"finance.rds"))
 ```
 
-```{r data, result="asis"}
-data <- read.csv(system.file("extdata", "data.csv", package = "capnet"))
-vars_to_keep <- c(
-  "X", "target", "S2", "E2", "E3", "P9", "S1", "S5", "I2", "P8",
-  "P10", "P12", "P13"
-)
-data <- data |>
-  mutate(
-    `U1` = `I1` - `I2`,
-    `U2` = `M11` / (`I2` + `I9` + `I7`) * 3
-  ) |>
-  select(all_of(vars_to_keep))
+## Protocol
 
+The bundled `inst/extdata/data.csv` contains daily market observations through
+2026-02-13. We use the eleven feature columns listed below, without constructing
+additional predictors. Training windows are 25 calendar years, refit monthly;
+the evaluation starts in January 2020. Complete training cases are used. The
+historical training window stays fixed as the cap penalty walks over individual
+rows in the following month (`walk = 1`).
 
-print(calc_moments(data[, c(-1, -2)]))
+```{r data}
+data <- paper_finance_data()
+names(data)
+calc_moments(data[,results$feature_cols])
 ```
 
-```{r experiment}
-results <- rolling_enet(
-  data,
-  date_col = "X",
-  target_col = "target",
-  alpha = 0.5,
-  window_years = 25,
-  method = c("capnet_walk", "capnet", "postcap"),
-  eval_start = "2020-01-01"
-)
+At each refit, `cv.glmnet` selects `lambda.min` with `alpha = 0.5`, ten random
+folds, and standardization. Monthly seeds start at 42 and increase by one.
+This lambda is shared across methods and gamma values. Random inner folds
+are retained from the original vignette; the outer evaluation remains
+chronological. This design is not forward-chaining inner validation.
 
-predictions <- list()
-contributions <- list()
-methods <- c()
-gamma_vals <- c()
-combos <- results$predictions |>
-  dplyr::distinct(method, gamma) |>
-  dplyr::arrange(method, gamma)
+Ceilings use the original helper rule
+$L_j=7|\mathrm{cor}(X_j,y)|/350$ on the complete training cases. This is a
+scale-dependent correlation heuristic, not a univariate slope rule.
+The ordinary `capnet` fit with `gamma = 0` supplies the uncapped model;
+post-fit capping clips its contributions and retains its intercept. The
+walk-forward grid is `c(0.1, 1, 10, 100)`.
 
-for (i in seq_len(nrow(combos))) {
-  m <- combos$method[i]
-  gamma_j <- combos$gamma[i]
+The data are taken as supplied by the competition. Their proprietary feature
+release times cannot be independently verified from this file; no portfolio
+return or investment-risk guarantee is inferred from these forecast results.
 
-  pred_tmp <- results$predictions |>
-    dplyr::filter(method == m, gamma == gamma_j)
-  contrib_tmp <- results$contributions |>
-    dplyr::filter(method == m, gamma == gamma_j)
-
-  predictions[[i]] <- pred_tmp
-  contributions[[i]] <- contrib_tmp
-  methods[i] <- m
-  gamma_vals[i] <- gamma_j
-}
+```{r compute-definition}
+# Exact shared definition used by tools/run_paper_experiments.R:
+paper_finance
 ```
 
-```{r summary, echo = FALSE}
-summary_table <- lapply(1:6, function(i) {
-  tibble::tibble(
-    method = methods[i],
-    gamma = ifelse(gamma_vals[i] == 0, NA_real_, gamma_vals[i]),
-    oos_r2 = calc_oos_r2(predictions[[i]])
-  )
-}) |>
-  dplyr::bind_rows()
+## Forecast scores
 
-print(summary_table)
+`calc_oos_r2` reports one pooled squared-error score,
+$1-\sum(y_t-\hat y_t)^2/\sum(y_t-\bar y_{t-1})^2$.
+The benchmark averages preceding **evaluation-period** responses, not initial
+training responses, and omits the first evaluation observation. This is not
+an average of monthly R-squared values.
+
+```{r scores}
+knitr::kable(paper_scores(results,"X"),digits=6)
 ```
 
-```{r fig.height = 6.5, fig.width = 10, echo = FALSE}
-selected_idx <- c(1, 2, 3)
+## Rolling performance and corrected contribution diagnostic
 
-rolling_list <- lapply(selected_idx, function(i) {
-  df <- rolling_oos_r2(predictions[[i]], window = 252) |>
-    tidyr::drop_na()
+The illustrative walk-forward specification uses gamma 0.1, fixed in this
+report rather than selected from the plotted evaluation window. Rolling
+scores use 252 scored observations. Each contribution series is computed as
+`apply(abs(contribution_matrix), 1, max)` **separately for each model**.
+Feature columns are selected by name; metadata never enters the maximum.
 
-  df$spec <- paste0(
-    methods[i],
-    ifelse(gamma_vals[i] == 0, "", paste0(" (γ=", gamma_vals[i], ")"))
-  )
-
-  df
-})
-
-plot_df <- dplyr::bind_rows(rolling_list) |>
-  dplyr::mutate(X = as.Date(X))
-
-ggplot(plot_df, aes(x = X, y = r2_roll, color = spec, group = spec)) +
-  geom_line(linewidth = 0.8, alpha = 0.9) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
-  scale_color_manual(values = c(
-    "Uncapped" = "steelblue",
-    "Post-Fit Cap" = "firebrick",
-    "Walk-forward Capnet (γ=0.1)" = "darkolivegreen4"
-  )) +
-
-  # --- FIX DATE AXIS ---
-  scale_x_date(
-    breaks = seq(
-      from = as.Date("2020-01-01"),
-      to   = max(plot_df$X),
-      by   = "6 months"
-    ),
-    date_labels = "%Y-%m"
-  ) +
-  labs(
-    x = "Date",
-    y = expression(R^2),
-    color = "Model"
-  ) +
-
-  # --- WHITE BACKGROUND ---
-  theme_bw(base_size = 16) +
-  theme(
-    legend.position = "top",
-    legend.title = element_text(face = "bold"),
-    plot.title = element_text(face = "bold", size = 16),
-    plot.subtitle = element_text(color = "gray40"),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(), # cleaner time axis
-    axis.text.x = element_text(angle = 0)
-  )
+```{r plots,fig.width=9,fig.height=5.6}
+plots <- paper_plots(results,"X",gamma=.1,window=252)
+plots$rolling
+plots$contributions
 ```
 
-```{r fig.height = 6.5, fig.width = 10, echo = FALSE}
-selected_idx <- c(1, 2, 3)
-ref <- contributions[[1]]
-max_col_idx <- max.col(abs(ref[, 6:16]), ties.method = "first")
-
-max_contributions <- lapply(selected_idx, function(i) {
-  df <- contributions[[i]]
-  mat <- as.matrix(df)
-  max_col <- as.numeric(mat[cbind(seq_len(nrow(mat)), max_col_idx + 5)])
-  df <- df[, 1:5]
-  df$max_col <- max_col
-  df$spec <- paste0(
-    methods[i],
-    ifelse(gamma_vals[i] == 0, "", paste0(" (γ=", gamma_vals[i], ")"))
-  )
-  df
-})
-
-plot_df <- dplyr::bind_rows(max_contributions) |>
-  dplyr::mutate(X = as.Date(X))
-
-ggplot(plot_df, aes(x = X, y = max_col, color = spec, group = spec)) +
-  geom_line(linewidth = 0.8, alpha = 0.8) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
-  scale_color_manual(values = c(
-    "Uncapped" = "steelblue",
-    "Post-Fit Cap" = "firebrick",
-    "Walk-forward Capnet (γ=0.1)" = "darkolivegreen4"
-  )) +
-
-  # --- FIX DATE AXIS ---
-  scale_x_date(
-    breaks = seq(
-      from = as.Date("2020-01-01"),
-      to   = max(plot_df$X),
-      by   = "6 months"
-    ),
-    date_labels = "%Y-%m"
-  ) +
-  labs(
-    x = "Date",
-    y = "Maximum Contribution",
-    color = "Model"
-  ) +
-
-  # --- WHITE BACKGROUND ---
-  theme_bw(base_size = 16) +
-  theme(
-    legend.position = "top",
-    legend.title = element_text(face = "bold"),
-    plot.title = element_text(face = "bold", size = 16),
-    plot.subtitle = element_text(color = "gray40"),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(), # cleaner time axis
-    axis.text.x = element_text(angle = 0)
-  )
+```{r snapshot}
+knitr::kable(paper_snapshot(results,"X","2023-05-24",.1,results$feature_cols,1e4),digits=3)
 ```
 
-```{r fig.height = 6.5, fig.width = 10, include = FALSE}
-selected_idx <- c(1, 2, 3)
+The snapshot scales contributions by $10^4$; the intercept is excluded.
 
-contribution_list <- lapply(selected_idx, function(i) {
-  df <- contributions[[i]]
-  df$spec <- paste0(
-    methods[i],
-    ifelse(gamma_vals[i] == 0, "", paste0(" (γ=", gamma_vals[i], ")"))
-  )
-  df
-})
+## Numerical diagnostics
 
-plot_df <- dplyr::bind_rows(contribution_list) |>
-  dplyr::mutate(X = as.Date(X))
-
-ggplot(plot_df, aes(x = X, y = `P13`, color = spec, group = spec)) +
-  geom_line(linewidth = 0.8, alpha = 0.8) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
-  scale_color_manual(values = c(
-    "Uncapped" = "steelblue",
-    "Post-Fit Cap" = "firebrick",
-    "Walk-forward Capnet (γ=0.1)" = "darkolivegreen4"
-  )) +
-
-  # --- FIX DATE AXIS ---
-  scale_x_date(
-    breaks = seq(
-      from = as.Date("2020-01-01"),
-      to   = max(plot_df$X),
-      by   = "6 months"
-    ),
-    date_labels = "%Y-%m"
-  ) +
-  labs(
-    x = "Date",
-    y = "Contribution",
-    color = "Model"
-  ) +
-
-  # --- WHITE BACKGROUND ---
-  theme_bw(base_size = 16) +
-  theme(
-    legend.position = "top",
-    legend.title = element_text(face = "bold"),
-    plot.title = element_text(face = "bold", size = 16),
-    plot.subtitle = element_text(color = "gray40"),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(), # cleaner time axis
-    axis.text.x = element_text(angle = 0)
-  )
+```{r diagnostics}
+stopifnot(all(is.finite(as.numeric(results$predictions$predicted))))
+results$diagnostics |> group_by(method,requested_gamma) |>
+  summarise(missing=sum(missing),
+    reduced_rows=sum(effective_gamma<requested_gamma,na.rm=TRUE),
+    unsuccessful_stops=sum(!is.na(convergence)&convergence<0&convergence != -1001),
+    .groups="drop")
 ```
 
+## Runtime protocol
 
+Runtime uses three serial repetitions of the entire backtest for each of
+`glmnet`, `capnet`, and `walk_capnet`, including monthly CV and output assembly.
+The two contribution-penalized methods both use **gamma 0.1**. The same monthly
+seeds and lambda-search defaults are used in every repetition. The initial
+package installation/loading is excluded. Requested BLAS/OpenMP thread limits
+are one, and no experiment-level parallelism is used for these timings.
+Reported numbers describe this machine and run, not portable solver rankings.
 
-
-
-```{r, include = FALSE}
-make_feature_table <- function(df_list, target_x, df_names = NULL,
-                               feature_cols = c(
-                                 "S2", "E2", "E3", "P9", "S1",
-                                 "S5", "I2", "P8", "P10", "P12", "P13"
-                               )) {
-  if (is.null(df_names)) {
-    df_names <- paste0("df", seq_along(df_list))
-  }
-
-  long_list <- lapply(seq_along(df_list), function(i) {
-    df_list[[i]] |>
-      dplyr::filter(.data$X == target_x) |>
-      dplyr::select(dplyr::all_of(feature_cols)) |>
-      tidyr::pivot_longer(
-        cols = dplyr::everything(),
-        names_to = "feature",
-        values_to = df_names[i]
-      )
-  })
-
-  out <- Reduce(
-    function(x, y) dplyr::left_join(x, y, by = "feature"),
-    long_list
-  )
-  as.data.frame(out)
-}
+```{r runtime}
+knitr::kable(read.csv(file.path(results_dir,"runtime-summary.csv")),digits=2)
 ```
 
-```{r contrib_table, result="asis"}
-tab <- make_feature_table(
-  df_list = contributions[c(1, 2, 3)],
-  target_x = "2023-05-24",
-  df_names = c("Post-Fit Cap", "Uncapped", "Walk-forward Capnet")
-)
-
-print(tab)
-```
-
-
-```{r runtime, echo = FALSE}
-start_glmnet <- Sys.time()
-models <- rolling_enet(
-  data,
-  date_col = "X",
-  target_col = "target",
-  alpha = 0.5,
-  window_years = 25,
-  method = c("glmnet"),
-  eval_start = "2020-01-01"
-)
-end_glmnet <- Sys.time()
-time_glmnet <- end_glmnet - start_glmnet
-
-sprintf("Backtest runtime for glmnet: %.2f seconds", time_glmnet)
-
-start_capnet <- Sys.time()
-models <- rolling_enet(
-  data,
-  date_col = "X",
-  target_col = "target",
-  alpha = 0.5,
-  window_years = 25,
-  method = c("capnet"),
-  eval_start = "2020-01-01"
-)
-end_capnet <- Sys.time()
-time_capnet <- end_capnet - start_capnet
-sprintf("Backtest runtime for capnet: %.2f seconds", time_capnet)
-
-start_capnet_walk <- Sys.time()
-models <- rolling_enet(
-  data,
-  date_col = "X",
-  target_col = "target",
-  alpha = 0.5,
-  window_years = 25,
-  method = c("capnet_walk"),
-  walk_gamma = c(0.1),
-  eval_start = "2020-01-01"
-)
-end_capnet_walk <- Sys.time()
-time_capnet_walk <- difftime(end_capnet_walk, start_capnet_walk, units = "secs")
-sprintf(
-  "Backtest runtime for walk-forward capnet: %.2f seconds",
-  time_capnet_walk
-)
-```
-
-
-
-
+Run `bash tools/reproduce_paper.sh` from the repository root for a fresh
+source install and all computations. Render this report with
+`params = list(rerun = TRUE)` to rerun its fitting step independently. Full
+predictions, convergence diagnostics, package versions, and input/source MD5
+checksums are saved in `manuscript/results/finance*` and `runtime*`.

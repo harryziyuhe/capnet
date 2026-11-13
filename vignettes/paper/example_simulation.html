@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Repeated proxy-noise experiment for contribution regularization</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Repeated proxy-noise experiment for
+contribution regularization</h1>
+
+
+
+<p>This is a <strong>replacement experiment</strong>, not a
+reconstruction of the undocumented single dataset behind the earlier
+manuscript Tables 1 and 2. The design and grid below are fixed before
+comparing performance. All replications, including those where capping
+hurts, enter the summaries.</p>
+<div id="data-generating-process" class="section level2">
+<h2>Data-generating process</h2>
+<p>There are 10 independent replications, each with 400 training and 100
+test observations and eight predictors. Latent rows are multivariate
+Gaussian with zero mean and covariance <span class="math inline">\(\Sigma_{jk}=0.5^{|j-k|}\)</span>. The response is
+<span class="math inline">\(y_i=X_i^{*\top}\beta+\epsilon_i\)</span>,
+where <span class="math inline">\(\beta=(2.5,1.9,1.3,0.9,0.8,0,0,0)^\top\)</span>
+and <span class="math inline">\(\epsilon_i\sim N(0,1)\)</span>. Observed
+predictors are <span class="math inline">\(X=X^*+E\)</span>.</p>
+<p>The <strong>homoskedastic control</strong> has independent <span class="math inline">\(E_{ij}\sim N(0,0.25^2)\)</span>. In the
+<strong>mixture scenario</strong>, predictors 1 and 2 instead have noise
+standard deviation 10. The spike probability is 0.10 in training and
+0.20 in the test batch; otherwise their noise standard deviation is
+0.25. All other predictors retain standard deviation 0.25. Both
+scenarios share latent rows, response noise, and base proxy-noise draws
+within each replication. Training and test rows are independent; there
+is no response scaling on the test data. The mixture setting is an
+explicit test-time stress shift from a 10% training spike rate to a 20%
+test-batch rate. Replication <span class="math inline">\(r\)</span> uses
+seed <code>20261112 + r</code>.</p>
+</div>
+<div id="training-only-calibration" class="section level2">
+<h2>Training-only calibration</h2>
+<p>Each replication/scenario selects <code>lambda.min</code> with
+ten-fold <code>cv.glmnet</code>, <code>alpha = 0.5</code>, and
+training-column standardization. Folds use seed <code>100000 + r</code>.
+That same lambda is held fixed across every cap configuration, so the
+comparison changes contribution regularization rather than retuning the
+coefficient penalty.</p>
+<p>Let <span class="math inline">\(b_j^{\rm uni}\)</span> be the
+training univariate OLS slope. Define <span class="math inline">\(B_j=\max\{|b_j^{\rm uni}|q_{0.95}(|X_{\cdot
+j}|),0.05s_y\}\)</span> and <span class="math inline">\(L_j=\kappa
+B_j\)</span>. The quantile, slopes, and response standard deviation use
+training rows only. This puts the ceiling in contribution units; the
+floor avoids nearly zero ceilings for weak training correlations.</p>
+<p>We cross <span class="math inline">\(\kappa\in\{0.5,1,2,4\}\)</span>
+with <span class="math inline">\(\gamma\in\{0.1,1,10,100\}\)</span>. The
+uncapped baseline has <span class="math inline">\(\gamma=0\)</span> and
+is fit once per replication/scenario. Test responses enter
+<strong>only</strong> the MSE.</p>
+<p>Joint evaluation fits once using all 100 test covariate rows in the
+penalty; this is a conditional/transductive comparison. Walk evaluation
+re-optimizes on each test row (<code>walk = 1</code>) with the training
+data held fixed. Neither scheme uses test responses in estimation. No
+test-grid winner is presented as an independently selected deployment
+model.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># The shared definition is the code actually used by the paper runner.</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="co"># To recompute rather than read this run, render with params = list(rerun = TRUE).</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="co"># sim &lt;- paper_simulation(repetitions=10, n_train=400, n_test=100)</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>sim<span class="sc">$</span>config</span></code></pre></div>
+<pre><code>## $repetitions
+## [1] 10
+## 
+## $n_train
+## [1] 400
+## 
+## $n_test
+## [1] 100
+## 
+## $beta
+## [1] 2.5 1.9 1.3 0.9 0.8 0.0 0.0 0.0
+## 
+## $Sigma
+##           [,1]     [,2]    [,3]   [,4]   [,5]    [,6]     [,7]      [,8]
+## [1,] 1.0000000 0.500000 0.25000 0.1250 0.0625 0.03125 0.015625 0.0078125
+## [2,] 0.5000000 1.000000 0.50000 0.2500 0.1250 0.06250 0.031250 0.0156250
+## [3,] 0.2500000 0.500000 1.00000 0.5000 0.2500 0.12500 0.062500 0.0312500
+## [4,] 0.1250000 0.250000 0.50000 1.0000 0.5000 0.25000 0.125000 0.0625000
+## [5,] 0.0625000 0.125000 0.25000 0.5000 1.0000 0.50000 0.250000 0.1250000
+## [6,] 0.0312500 0.062500 0.12500 0.2500 0.5000 1.00000 0.500000 0.2500000
+## [7,] 0.0156250 0.031250 0.06250 0.1250 0.2500 0.50000 1.000000 0.5000000
+## [8,] 0.0078125 0.015625 0.03125 0.0625 0.1250 0.25000 0.500000 1.0000000
+## 
+## $seed
+## [1] 20261112
+## 
+## $noise_low
+## [1] 0.25
+## 
+## $noise_high
+## [1] 10
+## 
+## $high_prob_train
+## [1] 0.1
+## 
+## $high_prob_test
+## [1] 0.2
+## 
+## $unstable
+## [1] 1 2
+## 
+## $alpha
+## [1] 0.5
+## 
+## $kappas
+## [1] 0.5 1.0 2.0 4.0
+## 
+## $gammas
+## [1]   0.1   1.0  10.0 100.0</code></pre>
+</div>
+<div id="tables-1-and-2" class="section level2">
+<h2>Tables 1 and 2</h2>
+<p>Entries are mean test MSE across the 10 independent replications.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="cf">for</span> (evaluation <span class="cf">in</span> <span class="fu">c</span>(<span class="st">&quot;joint&quot;</span>,<span class="st">&quot;walk&quot;</span>)) {</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>, evaluation, <span class="st">&quot; evaluation</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="fu">print</span>(knitr<span class="sc">::</span><span class="fu">kable</span>(sim<span class="sc">$</span>summary <span class="sc">|&gt;</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>    <span class="fu">filter</span>(scenario<span class="sc">==</span><span class="st">&quot;mixture&quot;</span>, .data<span class="sc">$</span>evaluation<span class="sc">==</span>.env<span class="sc">$</span>evaluation) <span class="sc">|&gt;</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>    <span class="fu">select</span>(gamma,kappa,mse,paired_delta), <span class="at">digits=</span><span class="dv">4</span>))</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>}</span></code></pre></div>
+<pre><code>## 
+##  joint  evaluation
+## 
+## 
+## | gamma| kappa|     mse| paired_delta|
+## |-----:|-----:|-------:|------------:|
+## |   0.0|    NA| 13.6475|       0.0000|
+## |   0.1|   0.5| 13.2112|      -0.4363|
+## |   0.1|   1.0| 13.3469|      -0.3006|
+## |   0.1|   2.0| 13.5368|      -0.1108|
+## |   0.1|   4.0| 13.6475|       0.0000|
+## |   1.0|   0.5| 13.0668|      -0.5808|
+## |   1.0|   1.0| 12.9866|      -0.6609|
+## |   1.0|   2.0| 13.3130|      -0.3345|
+## |   1.0|   4.0| 13.6475|       0.0000|
+## |  10.0|   0.5| 13.7523|       0.1048|
+## |  10.0|   1.0| 12.9328|      -0.7148|
+## |  10.0|   2.0| 13.1961|      -0.4514|
+## |  10.0|   4.0| 13.6475|       0.0000|
+## | 100.0|   0.5| 14.4446|       0.7971|
+## | 100.0|   1.0| 12.9517|      -0.6958|
+## | 100.0|   2.0| 13.1815|      -0.4660|
+## | 100.0|   4.0| 13.6475|       0.0000|
+## 
+##  walk  evaluation
+## 
+## 
+## | gamma| kappa|     mse| paired_delta|
+## |-----:|-----:|-------:|------------:|
+## |   0.0|    NA| 13.6475|       0.0000|
+## |   0.1|   0.5| 12.1736|      -1.4739|
+## |   0.1|   1.0| 12.7695|      -0.8780|
+## |   0.1|   2.0| 13.3823|      -0.2652|
+## |   0.1|   4.0| 13.6475|       0.0000|
+## |   1.0|   0.5| 12.0524|      -1.5951|
+## |   1.0|   1.0| 12.6854|      -0.9622|
+## |   1.0|   2.0| 13.3689|      -0.2786|
+## |   1.0|   4.0| 13.6475|       0.0000|
+## |  10.0|   0.5| 12.0487|      -1.5989|
+## |  10.0|   1.0| 12.6752|      -0.9724|
+## |  10.0|   2.0| 13.3675|      -0.2800|
+## |  10.0|   4.0| 13.6475|       0.0000|
+## | 100.0|   0.5| 12.0486|      -1.5990|
+## | 100.0|   1.0| 12.6741|      -0.9734|
+## | 100.0|   2.0| 13.3674|      -0.2802|
+## | 100.0|   4.0| 13.6475|       0.0000|</code></pre>
+<p><code>paired_delta</code> is capped MSE minus the uncapped MSE from
+the <strong>same</strong> replication. Its standard error uses those
+paired differences; negative values favor capping. Report the full grid
+rather than interpreting its minimum as a tuned model’s validated
+performance.</p>
+</div>
+<div id="homoskedastic-control" class="section level2">
+<h2>Homoskedastic control</h2>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(sim<span class="sc">$</span>summary <span class="sc">|&gt;</span> <span class="fu">filter</span>(scenario<span class="sc">==</span><span class="st">&quot;homoskedastic&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="fu">select</span>(evaluation,gamma,kappa,mse,paired_delta),<span class="at">digits=</span><span class="dv">4</span>)</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th align="left">evaluation</th>
+<th align="right">gamma</th>
+<th align="right">kappa</th>
+<th align="right">mse</th>
+<th align="right">paired_delta</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">joint</td>
+<td align="right">0.0</td>
+<td align="right">NA</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">0.1</td>
+<td align="right">0.5</td>
+<td align="right">1.8865</td>
+<td align="right">0.0069</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">0.1</td>
+<td align="right">1.0</td>
+<td align="right">1.8795</td>
+<td align="right">-0.0001</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">0.1</td>
+<td align="right">2.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">0.1</td>
+<td align="right">4.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">1.0</td>
+<td align="right">0.5</td>
+<td align="right">2.0050</td>
+<td align="right">0.1254</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">1.0</td>
+<td align="right">1.0</td>
+<td align="right">1.8792</td>
+<td align="right">-0.0003</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">1.0</td>
+<td align="right">2.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">1.0</td>
+<td align="right">4.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">10.0</td>
+<td align="right">0.5</td>
+<td align="right">2.6656</td>
+<td align="right">0.7861</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">10.0</td>
+<td align="right">1.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">10.0</td>
+<td align="right">2.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">10.0</td>
+<td align="right">4.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">100.0</td>
+<td align="right">0.5</td>
+<td align="right">3.5439</td>
+<td align="right">1.6644</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">100.0</td>
+<td align="right">1.0</td>
+<td align="right">1.8801</td>
+<td align="right">0.0006</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">100.0</td>
+<td align="right">2.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">joint</td>
+<td align="right">100.0</td>
+<td align="right">4.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">0.0</td>
+<td align="right">NA</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">0.1</td>
+<td align="right">0.5</td>
+<td align="right">1.9661</td>
+<td align="right">0.0865</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">0.1</td>
+<td align="right">1.0</td>
+<td align="right">1.8792</td>
+<td align="right">-0.0003</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">0.1</td>
+<td align="right">2.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">0.1</td>
+<td align="right">4.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">1.0</td>
+<td align="right">0.5</td>
+<td align="right">2.0810</td>
+<td align="right">0.2014</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">1.0</td>
+<td align="right">1.0</td>
+<td align="right">1.8791</td>
+<td align="right">-0.0004</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">1.0</td>
+<td align="right">2.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">1.0</td>
+<td align="right">4.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">10.0</td>
+<td align="right">0.5</td>
+<td align="right">2.1082</td>
+<td align="right">0.2287</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">10.0</td>
+<td align="right">1.0</td>
+<td align="right">1.8791</td>
+<td align="right">-0.0004</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">10.0</td>
+<td align="right">2.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">10.0</td>
+<td align="right">4.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">100.0</td>
+<td align="right">0.5</td>
+<td align="right">2.1113</td>
+<td align="right">0.2318</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">100.0</td>
+<td align="right">1.0</td>
+<td align="right">1.8791</td>
+<td align="right">-0.0004</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">100.0</td>
+<td align="right">2.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+<tr>
+<td align="left">walk</td>
+<td align="right">100.0</td>
+<td align="right">4.0</td>
+<td align="right">1.8795</td>
+<td align="right">0.0000</td>
+</tr>
+</tbody>
+</table>
+<p>The control checks the cost of capping when large observed values are
+mostly informative signal. A penalty that helps noisy proxies need not
+help here.</p>
+</div>
+<div id="numerical-checks-and-reproduction" class="section level2">
+<h2>Numerical checks and reproduction</h2>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(sim<span class="sc">$</span>raw)<span class="sc">==</span><span class="dv">10</span><span class="sc">*</span><span class="dv">2</span><span class="sc">*</span>(<span class="dv">2</span><span class="sc">+</span><span class="dv">2</span><span class="sc">*</span><span class="dv">4</span><span class="sc">*</span><span class="dv">4</span>),<span class="fu">all</span>(<span class="fu">is.finite</span>(sim<span class="sc">$</span>raw<span class="sc">$</span>mse)))</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>sim<span class="sc">$</span>summary <span class="sc">|&gt;</span> <span class="fu">group_by</span>(scenario,evaluation) <span class="sc">|&gt;</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">reduced_rows=</span><span class="fu">sum</span>(reduced_rows), <span class="at">.groups=</span><span class="st">&quot;drop&quot;</span>)</span></code></pre></div>
+<pre><code>## # A tibble: 4 × 3
+##   scenario      evaluation reduced_rows
+##   &lt;chr&gt;         &lt;chr&gt;             &lt;int&gt;
+## 1 homoskedastic joint                 0
+## 2 homoskedastic walk                  0
+## 3 mixture       joint                 0
+## 4 mixture       walk                  0</code></pre>
+<p>The runner rejects non-finite predictions and unsuccessful joint-fit
+stops. Walk-forward fitting can retry with a lower gamma; reduced rows
+are counted rather than silently treated as fits at the requested
+penalty.</p>
+<p>From the repository root, run
+<code>bash tools/reproduce_paper.sh</code> to install the current source
+into an isolated temporary R library, execute all experiments, export
+tables/figures, and render these reports. Per-replication results and
+paired summaries are in
+<code>manuscript/results/simulation-*.csv</code>; session metadata and
+input/source checksums are saved alongside them. Runtime is not an
+outcome of this simulation, and changing worker count does not change
+the specified RNG streams.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

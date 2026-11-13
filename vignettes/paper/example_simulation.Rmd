@@ -1,0 +1,126 @@
+---
+title: "Repeated proxy-noise experiment for contribution regularization"
+output: rmarkdown::html_vignette
+params:
+  rerun: false
+vignette: >
+  %\VignetteIndexEntry{Repeated proxy-noise experiment for contribution regularization}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, message=FALSE)
+library(capnet)
+library(dplyr)
+repo_root <- normalizePath("../..")
+source("helpers.R")
+source("experiments.R")
+source("simulation.R")
+results_dir <- file.path(repo_root,"manuscript/results")
+sim <- if (params$rerun) paper_simulation() else readRDS(file.path(results_dir,"simulation.rds"))
+```
+
+This is a **replacement experiment**, not a reconstruction of the undocumented
+single dataset behind the earlier manuscript Tables 1 and 2. The design and grid
+below are fixed before comparing performance. All replications, including those
+where capping hurts, enter the summaries.
+
+## Data-generating process
+
+There are 10 independent replications, each with 400 training and 100 test
+observations and eight predictors. Latent rows are multivariate Gaussian with
+zero mean and covariance $\Sigma_{jk}=0.5^{|j-k|}$. The response is
+$y_i=X_i^{*\top}\beta+\epsilon_i$, where
+$\beta=(2.5,1.9,1.3,0.9,0.8,0,0,0)^\top$ and $\epsilon_i\sim N(0,1)$.
+Observed predictors are $X=X^*+E$.
+
+The **homoskedastic control** has independent $E_{ij}\sim N(0,0.25^2)$.
+In the **mixture scenario**, predictors 1 and 2 instead have noise standard
+deviation 10. The spike probability is 0.10 in training and 0.20 in the test
+batch; otherwise their noise standard deviation is 0.25. All other
+predictors retain standard deviation 0.25. Both scenarios share latent rows,
+response noise, and base proxy-noise draws within each replication. Training
+and test rows are independent; there is no response scaling on the test data.
+The mixture setting is an explicit test-time stress shift from a 10% training
+spike rate to a 20% test-batch rate.
+Replication $r$ uses seed `20261112 + r`.
+
+## Training-only calibration
+
+Each replication/scenario selects `lambda.min` with ten-fold `cv.glmnet`,
+`alpha = 0.5`, and training-column standardization. Folds use seed
+`100000 + r`. That same lambda is held fixed across every cap configuration,
+so the comparison changes contribution regularization rather than retuning the
+coefficient penalty.
+
+Let $b_j^{\rm uni}$ be the training univariate OLS slope. Define
+$B_j=\max\{|b_j^{\rm uni}|q_{0.95}(|X_{\cdot j}|),0.05s_y\}$ and
+$L_j=\kappa B_j$. The quantile, slopes, and response standard deviation use
+training rows only. This puts the ceiling in contribution units; the floor
+avoids nearly zero ceilings for weak training correlations.
+
+We cross $\kappa\in\{0.5,1,2,4\}$ with
+$\gamma\in\{0.1,1,10,100\}$. The uncapped baseline has $\gamma=0$ and
+is fit once per replication/scenario. Test responses enter **only** the MSE.
+
+Joint evaluation fits once using all 100 test covariate rows in the penalty;
+this is a conditional/transductive comparison. Walk evaluation re-optimizes
+on each test row (`walk = 1`) with the training data held fixed. Neither
+scheme uses test responses in estimation. No test-grid winner is presented as
+an independently selected deployment model.
+
+```{r definitions}
+# The shared definition is the code actually used by the paper runner.
+# To recompute rather than read this run, render with params = list(rerun = TRUE).
+# sim <- paper_simulation(repetitions=10, n_train=400, n_test=100)
+sim$config
+```
+
+## Tables 1 and 2
+
+Entries are mean test MSE across the 10 independent replications.
+
+```{r mixture-tables}
+for (evaluation in c("joint","walk")) {
+  cat("\n", evaluation, " evaluation\n")
+  print(knitr::kable(sim$summary |>
+    filter(scenario=="mixture", .data$evaluation==.env$evaluation) |>
+    select(gamma,kappa,mse,paired_delta), digits=4))
+}
+```
+
+`paired_delta` is capped MSE minus the uncapped MSE from the **same** replication.
+Its standard error uses those paired differences; negative values favor
+capping. Report the full grid rather than interpreting its minimum as a tuned
+model's validated performance.
+
+## Homoskedastic control
+
+```{r control}
+knitr::kable(sim$summary |> filter(scenario=="homoskedastic") |>
+  select(evaluation,gamma,kappa,mse,paired_delta),digits=4)
+```
+
+The control checks the cost of capping when large observed values are mostly
+informative signal. A penalty that helps noisy proxies need not help here.
+
+## Numerical checks and reproduction
+
+```{r diagnostics}
+stopifnot(nrow(sim$raw)==10*2*(2+2*4*4),all(is.finite(sim$raw$mse)))
+sim$summary |> group_by(scenario,evaluation) |>
+  summarise(reduced_rows=sum(reduced_rows), .groups="drop")
+```
+
+The runner rejects non-finite predictions and unsuccessful joint-fit stops.
+Walk-forward fitting can retry with a lower gamma; reduced rows are counted
+rather than silently treated as fits at the requested penalty.
+
+From the repository root, run `bash tools/reproduce_paper.sh` to install the
+current source into an isolated temporary R library, execute all experiments,
+export tables/figures, and render these reports. Per-replication results and
+paired summaries are in `manuscript/results/simulation-*.csv`; session metadata
+and input/source checksums are saved alongside them. Runtime is not an outcome
+of this simulation, and changing worker count does not change the specified RNG
+streams.

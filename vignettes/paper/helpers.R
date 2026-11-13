@@ -279,6 +279,7 @@ rolling_enet <- function(df,
 
     month_preds <- list()
     month_contribs <- list()
+    month_diagnostics <- list()
     idx <- 1L
 
     if ("glmnet" %in% method) {
@@ -324,6 +325,12 @@ rolling_enet <- function(df,
           lambda = lambda,
           alpha = alpha,
           gamma = gamma_j
+        )
+
+        month_diagnostics[[length(month_diagnostics) + 1L]] <- tibble::tibble(
+          refit_month = pred_month, method = "capnet", requested_gamma = gamma_j,
+          effective_gamma = gamma_j, convergence = fit_cap$convergence,
+          n_rows = nrow(x_test), missing = sum(!is.finite(predict(fit_cap, x_test)))
         )
 
         if ("capnet" %in% method) {
@@ -406,6 +413,13 @@ rolling_enet <- function(df,
           workers = walk_workers
         )
 
+        month_diagnostics[[length(month_diagnostics) + 1L]] <- tibble::tibble(
+          refit_month = pred_month, method = "Walk-forward Capnet",
+          requested_gamma = gamma_j, effective_gamma = as.numeric(fit_walk$gammas),
+          convergence = NA_integer_, n_rows = 1L,
+          missing = as.integer(!is.finite(as.numeric(fit_walk$predictions)))
+        )
+
         month_preds[[idx]] <- tibble::tibble(
           !!date_col := test_use[[date_col]],
           refit_month = pred_month,
@@ -436,7 +450,8 @@ rolling_enet <- function(df,
     list(
       pred = dplyr::bind_rows(month_preds),
       contrib = dplyr::bind_rows(month_contribs),
-      lambda = lambda
+      lambda = lambda,
+      diagnostics = dplyr::bind_rows(month_diagnostics)
     )
   }
 
@@ -475,6 +490,7 @@ rolling_enet <- function(df,
     dplyr::filter(!is.na(lambda))
 
   list(
+    diagnostics = dplyr::bind_rows(lapply(month_results, `[[`, "diagnostics")),
     predictions = predictions,
     contributions = contributions,
     metrics = metrics,
@@ -521,11 +537,14 @@ rolling_oos_r2 <- function(pred_df, window = 20, date_col = "X") {
       se_bench = (actual - mean_benchmark)^2
     )
 
+  # An explicit function bypasses zoo's cumulative-sum shortcut. After an
+  # enormous Poisson forecast error leaves a window, cumulative subtraction
+  # can lose the small remaining squared errors and even produce R2 > 1.
   pred_df |>
     mutate(
       r2_roll = 1 - zoo::rollapply(
-        se_model, window, sum, fill = NA, align = "right"
+        se_model, window, function(x) sum(x), fill = NA, align = "right"
       ) /
-        zoo::rollapply(se_bench, window, sum, fill = NA, align = "right")
+        zoo::rollapply(se_bench, window, function(x) sum(x), fill = NA, align = "right")
     )
 }
