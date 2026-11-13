@@ -1,0 +1,8 @@
+"method","gamma","n","oos_r2"
+"Post-Fit Cap",0,365,-1.11282537819428
+"Uncapped",0,365,0.539702191282739
+"Walk-forward Capnet",10,365,0.539598377452114
+"Walk-forward Capnet",100,365,0.542765732874283
+"Walk-forward Capnet",1000,365,0.56179303200309
+"Walk-forward Capnet",10000,365,0.569181168765013
+"Walk-forward Capnet",1e+05,365,0.574310955495908

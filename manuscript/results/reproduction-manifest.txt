@@ -1,0 +1,53 @@
+Finalized: 2026-11-12 23:10:35.849863
+R version 4.4.2 (2024-10-31)
+Platform: x86_64-apple-darwin20
+Running under: macOS Sequoia 15.4.1
+
+Matrix products: default
+BLAS:   /Library/Frameworks/R.framework/Versions/4.4-x86_64/Resources/lib/libRblas.0.dylib 
+LAPACK: /Library/Frameworks/R.framework/Versions/4.4-x86_64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.0
+
+locale:
+[1] C.UTF-8/C.UTF-8/C.UTF-8/C/C.UTF-8/C.UTF-8
+
+time zone: America/Chicago
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+loaded via a namespace (and not attached):
+[1] compiler_4.4.2
+Source and data MD5 checksums:
+                           DESCRIPTION                         R/capnet_fit.R 
+    "1016520d5c7c57a48a4bbb8312b2dda7"     "cde9d22ca2a9d563dca12fd4924e1fb6" 
+                     R/capnet_output.R                    R/capnet_parallel.R 
+    "f16a672caf8010fe5e160366015504be"     "a4c2fe53fa47da3a386613e5dd6ed360" 
+                    R/capnet_prepare.R                             R/capnet.R 
+    "139868045d471362e69b7229066d514b"     "180c99b7dbd9c2dde7c0f6b877947860" 
+                         R/coef_path.R                          R/cv_capnet.R 
+    "ca003e5b612f7d93e5cb5ee41253935b"     "f396c34b788bc8f1addc73bb3ec85956" 
+                            R/family.R                            R/methods.R 
+    "4b1de156e1df3b154281cfc088ee4be0"     "84291a7b84c06d8091c436ee34953d43" 
+                 R/objective_factory.R                R/plot_redistribution.R 
+    "a317b05cc1ef9ae4cc67ff117f25de70"     "f065d36139562ca06942768f0f8a4566" 
+              R/simulate_capnet_data.R                              R/utils.R 
+    "facba5a7c388ac5cddec3390f2b13ad8"     "4ba66cd883f4e6f377685ef472201edb" 
+                        R/violations.R                        R/walk_capnet.R 
+    "d169b2cdac24ac6cbd0d757d5a42b6ab"     "9d2d09d552237abf09c4825966505ae1" 
+      vignettes/paper/example_elan.Rmd vignettes/paper/example_simulation.Rmd 
+    "0fc18da1a747d6d7ba906df3a598ee44"     "c602a78e79a22b7c0dd8d6e59becd1da" 
+      vignettes/paper/example_wiki.Rmd          vignettes/paper/experiments.R 
+    "378f7a1ff5114e506cd551704abb537c"     "48f65c55ad85069a661f8371219d1642" 
+      vignettes/paper/export_results.R              vignettes/paper/helpers.R 
+    "a243918d65251ef6b57194ac05c5beaa"     "3bbd06fe7a1f6a50ee1fd15f1dfa9071" 
+          vignettes/paper/simulation.R                  inst/extdata/data.csv 
+    "f23edf4fa712e8e517e9a80b1d1f6cf6"     "e14d36aabf82433640f06a9de416601b" 
+          inst/extdata/market_data.csv          inst/extdata/wiki_traffic.csv 
+    "9a4b4dcbc6a57627bf2a19bdd6d8af3a"     "1b71d7bd830feb100168d84c6efdf583" 
+           tools/check_paper_results.R         tools/render_paper_vignettes.R 
+    "d67e86326d50d257f6154cb52fa2e922"     "c7804ca46f8c8d09ad72bd5ca09335c7" 
+              tools/reproduce_paper.sh          tools/run_paper_experiments.R 
+    "c88e30e43eee2ddf5adb8b43239dc877"     "c73ba76d358e6500cd6da16db29ac2f8" 
+          tools/write_paper_manifest.R 
+    "858bdc728ef1bb64015ef4bd8033325d" 

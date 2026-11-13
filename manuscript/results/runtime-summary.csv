@@ -1,0 +1,4 @@
+"model","median","min","max","repetitions"
+"capnet",24.435,23.367,39.319,3
+"glmnet",20.615,19.765,26.922,3
+"walk_capnet",81.641,76.086,89.184,3

@@ -1,0 +1,17 @@
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+Rolling score: extreme-scale cancellation regression check passed.
+Simulation: 10 paired replications in both scenarios; shared lambda and baseline verified.
+finance : finite forecasts, numerical stops, pooled scores, per-model maxima, and post-fit identity verified.
+wiki : finite forecasts, numerical stops, pooled scores, per-model maxima, and post-fit identity verified.
+Runtime: three finite positive repetitions per method.
+All saved-result integrity checks passed.

@@ -1,0 +1,10 @@
+"repetition","model","elapsed"
+1,"glmnet",26.922
+1,"capnet",39.319
+1,"walk_capnet",89.184
+2,"glmnet",20.615
+2,"capnet",24.435
+2,"walk_capnet",76.086
+3,"glmnet",19.765
+3,"capnet",23.367
+3,"walk_capnet",81.641
